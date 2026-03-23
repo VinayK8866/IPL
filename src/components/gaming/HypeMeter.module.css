@@ -1,0 +1,116 @@
+.container {
+  padding: 1.5rem;
+  background: var(--color-navy-light);
+  border: 2px solid var(--color-navy-dark);
+  box-shadow: var(--shadow-neon);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: white;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 800;
+  font-style: italic;
+  font-size: 1.25rem;
+  color: var(--color-gold);
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+  margin: 0;
+}
+
+.badge {
+  font-size: 0.75rem;
+  background: var(--color-neon-pink);
+  padding: 0.25rem 0.75rem;
+  color: white;
+  font-weight: 900;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+
+.meterWrapper {
+  position: relative;
+  height: 48px;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+}
+
+.meterBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding-left: 1rem;
+}
+
+.percentText {
+  font-weight: 900;
+  font-size: 1.25rem;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.percentTextRight {
+  position: absolute;
+  right: 1rem;
+  font-weight: 900;
+  font-size: 1.25rem;
+  color: var(--color-gold);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.hypeBtn {
+  background: transparent;
+  border: 2px solid;
+  color: white;
+  padding: 1rem;
+  font-weight: 900;
+  font-size: 1rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: var(--transit-fast);
+  letter-spacing: 0.1em;
+}
+
+.btnPurple {
+  border-color: var(--color-electric-purple);
+  box-shadow: 0 0 10px rgba(122, 63, 225, 0.2);
+}
+
+.btnPurple:hover {
+  background: var(--color-electric-purple);
+  box-shadow: 0 0 25px rgba(122, 63, 225, 0.6);
+  transform: translateY(-2px);
+}
+
+.btnGold {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.2);
+  color: var(--color-gold);
+}
+
+.btnGold:hover {
+  background: var(--color-gold);
+  color: black;
+  box-shadow: 0 0 25px rgba(255, 215, 0, 0.6);
+  transform: translateY(-2px);
+}

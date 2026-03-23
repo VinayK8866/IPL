@@ -1,0 +1,115 @@
+.card {
+  padding: 1.5rem;
+  background: var(--color-navy-light);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+  z-index: 1;
+}
+
+.onFire {
+  background: linear-gradient(135deg, rgba(122, 63, 225, 0.2) 0%, rgba(255, 51, 102, 0.2) 100%);
+  border: 1px solid var(--color-neon-pink);
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.6);
+  animation: pulseFire 2s infinite ease-in-out;
+}
+
+/* Pseudo-element for animated fire overlay */
+.onFire::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  z-index: -1;
+  background: linear-gradient(45deg, #ff3366, #ff7e5f, #feb47b, #ff3366);
+  background-size: 400%;
+  filter: blur(8px);
+  animation: fireGradient 3s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes fireGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulseFire {
+  0% { box-shadow: 0 0 20px rgba(255, 51, 102, 0.4); }
+  50% { box-shadow: 0 0 40px rgba(255, 51, 102, 0.8); }
+  100% { box-shadow: 0 0 20px rgba(255, 51, 102, 0.4); }
+}
+
+.playerInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.name {
+  font-weight: 900;
+  font-size: 1.125rem;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.fireBadge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 0.25rem 0.5rem;
+  background: #ff3366;
+  border-radius: 2px;
+  color: #fff;
+}
+
+.stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.statGroup {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.valBig {
+  font-size: 1.5rem;
+  font-weight: 900;
+}
+
+.subText {
+  color: var(--text-dim);
+  font-size: 0.875rem;
+}
+
+.statGroupSmall {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.label {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.val {
+  font-weight: 800;
+  color: var(--color-gold);
+}
+
+.boundaryCounts {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  display: flex;
+  gap: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 0.75rem;
+}

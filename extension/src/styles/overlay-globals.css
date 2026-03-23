@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap');
+
+:host {
+  all: initial;
+}
+
+#shadow-wrapper {
+  font-family: 'Outfit', sans-serif;
+  color-scheme: dark;
+  position: relative;
+  z-index: 2147483647;
+}
+
+#overlay-sidebar {
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(20px);
+}
+
+.sidebar-header h1 {
+  margin: 0;
+  font-style: italic;
+  text-transform: uppercase;
+}

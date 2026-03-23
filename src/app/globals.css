@@ -1,0 +1,39 @@
+@import "tailwindcss";
+@import "../styles/theme.css";
+
+@layer components {
+  /* Standard CSS for custom theme tokens to avoid @apply resolution issues */
+  .neon-glow-purple {
+    @apply border-2;
+    border-color: rgba(122, 63, 225, 0.5);
+    box-shadow: var(--shadow-neon-purple);
+  }
+
+  .neon-glow-pink {
+    @apply border-2;
+    border-color: rgba(255, 51, 102, 0.5);
+    box-shadow: var(--shadow-neon-pink);
+  }
+
+  .btn-cyber {
+    @apply px-6 py-2 bg-transparent border-2 font-black uppercase tracking-widest transition-all active:translate-y-1;
+    border-color: var(--color-electric-purple);
+    
+    &:hover {
+      background-color: var(--color-electric-purple);
+      box-shadow: var(--shadow-neon-purple);
+    }
+  }
+
+  .btn-gold {
+    @apply px-6 py-2 bg-transparent border-2 font-black uppercase tracking-widest transition-all active:translate-y-1;
+    color: var(--color-gold-csk);
+    border-color: var(--color-gold-csk);
+    
+    &:hover {
+      background-color: var(--color-gold-csk);
+      color: black;
+      box-shadow: 0 0 20px #FFD700;
+    }
+  }
+}

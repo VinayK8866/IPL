@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Cricket Pulse: Broadcast Sync Overlay",
+  "version": "1.0.0",
+  "description": "Real-time cricket stats and hype meter overlay for official streams.",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["https://*.hotstar.com/*", "https://*.jiocinema.com/*", "https://*.espncricinfo.com/*"],
+  "action": {
+    "default_popup": "src/popup/index.html",
+    "default_icon": "icon.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.hotstar.com/*", "https://*.jiocinema.com/*"],
+      "js": ["src/content-scripts/overlay.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/styles/theme.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

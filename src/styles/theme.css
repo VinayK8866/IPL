@@ -1,0 +1,145 @@
+:root {
+  /* Core Colors - Cyber-Sport Palette */
+  --color-background: #0B0E14; /* Deep Navy Baseline */
+  --color-deep-navy: #0B0E14;
+  --color-navy-dark: #05070A;
+  --color-navy-light: #1A1F29;
+  
+  --color-electric-purple: #7A3FE1; /* Kolkata (KKR) */
+  --color-gold-csk: #FFD700; /* CSK */
+  --color-neon-pink: #FF3366; /* RR */
+  --color-electric-blue: #00D4FF; /* MI (Blue Tint) */
+  --color-neon-cyan: #00F5FF;
+  
+  /* Gradients */
+  --background-image-cyber-gradient: linear-gradient(135deg, #7A3FE1 0%, #FF3366 100%);
+  --background-image-gold-gradient: linear-gradient(135deg, #DAA520 0%, #FFD700 100%);
+  --background-image-navy-gradient: linear-gradient(180deg, #0B0E14 0%, #05070A 100%);
+  --background-image-highlight: linear-gradient(90deg, rgba(122, 63, 225, 0.2) 0%, rgba(255, 51, 102, 0.2) 100%);
+  
+  /* Shadows & FX */
+  --shadow-neon-purple: 0 0 15px rgba(122, 63, 225, 0.6);
+  --shadow-neon-pink: 0 0 15px rgba(255, 51, 102, 0.6);
+  --drop-shadow-glow-gold: 0 0 8px #FFD700;
+
+  /* Standard Tokens */
+  --text-main: #E2E8F0;
+  --text-dim: #94A3B8;
+  --text-accent: var(--color-gold-csk);
+
+  /* Transitions */
+  --transit-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transit-smooth: 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--text-main);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden;
+  line-height: 1.5;
+}
+
+h1, h2, h3, h4 {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-navy-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-navy-light);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-electric-purple);
+}
+
+/* Global FX Classes */
+.cyber-card {
+  background: rgba(26, 31, 41, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 4px; /* Strictly no soft cards - but keeping 4px for slight definition */
+  position: relative;
+  overflow: hidden;
+}
+
+.cyber-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--background-image-cyber-gradient);
+}
+
+.on-fire {
+  position: relative;
+  filter: drop-shadow(0 0 12px var(--color-neon-pink));
+}
+
+.on-fire::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -10;
+  filter: blur(4px);
+  opacity: 0.5;
+  background: linear-gradient(45deg, var(--color-neon-pink), #ff7e5f, var(--color-electric-purple), var(--color-neon-pink));
+  background-size: 400%;
+  animation: fire-flow 3s linear infinite;
+}
+
+@keyframes fire-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes fire-sprite-animate {
+  0% { opacity: 0.6; transform: scaleY(1) translateY(0); }
+  25% { opacity: 0.8; transform: scaleY(1.2) translateY(-2px); }
+  50% { opacity: 0.5; transform: scaleY(1.1) translateY(0); }
+  75% { opacity: 0.9; transform: scaleY(1.3) translateY(-1px); }
+  100% { opacity: 0.6; transform: scaleY(1) translateY(0); }
+}
+
+.fire-sprite-overlay {
+  background: linear-gradient(0deg, var(--color-neon-pink) 0%, transparent 60%);
+  mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 40%, rgba(0,0,0,0) 80%);
+  animation: fire-sprite-animate 0.4s steps(4) infinite;
+}
+
+.neon-text-glow {
+  text-shadow: 0 0 8px currentColor;
+}
+
+@keyframes pulse-glow {
+  0% { text-shadow: 0 0 8px rgba(255, 215, 0, 0.8); }
+  50% { text-shadow: 0 0 18px rgba(255, 215, 0, 1), 0 0 25px rgba(255, 165, 0, 0.6); }
+  100% { text-shadow: 0 0 8px rgba(255, 215, 0, 0.8); }
+}
+
+@keyframes expert-border-pulse {
+  0% { border-color: var(--color-electric-purple); box-shadow: 0 0 5px rgba(122, 63, 225, 0.4); }
+  50% { border-color: var(--color-neon-pink); box-shadow: 0 0 15px rgba(255, 51, 102, 0.4); }
+  100% { border-color: var(--color-electric-purple); box-shadow: 0 0 5px rgba(122, 63, 225, 0.4); }
+}
+
+.expert-card {
+  animation: expert-border-pulse 3s infinite ease-in-out;
+}

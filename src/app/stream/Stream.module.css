@@ -1,0 +1,129 @@
+.streamWrapper {
+  width: 1920px; /* Target 1080p width */
+  height: 1080px; /* Target 1080p height */
+  background: var(--color-bg); /* Use Deep Navy */
+  color: white;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+}
+
+.streamHeader {
+  position: absolute;
+  top: 50px;
+  left: 50px;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.liveBadge {
+  background: #ff3366;
+  padding: 0.5rem 1.5rem;
+  font-weight: 900;
+  font-size: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pulse {
+  animation: blink 1s infinite alternate;
+}
+
+@keyframes blink {
+  from { opacity: 1; }
+  to { opacity: 0.3; }
+}
+
+.matchTitle {
+  font-size: 2.5rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  text-transform: uppercase;
+}
+
+.overlayFocus {
+  position: absolute;
+  top: 200px;
+  left: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.bigScore {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+}
+
+.scoreText {
+  font-size: 7rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+
+.oversText {
+  font-size: 3rem;
+  color: var(--text-dim);
+}
+
+.statsRow {
+  display: flex;
+  gap: 2rem;
+}
+
+.statBox {
+  padding: 0.75rem 2rem;
+  background: rgba(122, 63, 225, 0.2);
+  border-left: 5px solid var(--color-electric-purple);
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.momentumAnchor {
+  width: 800px;
+  margin-top: 2rem;
+}
+
+.battersOverlay {
+  position: absolute;
+  bottom: 150px;
+  right: 50px;
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.streamFooter {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 80px;
+  background: var(--color-navy-dark);
+  border-top: 2px solid var(--color-electric-purple);
+  display: flex;
+  align-items: center;
+}
+
+.ticker {
+  white-space: nowrap;
+  animation: tickerScroll 20s linear infinite;
+}
+
+@keyframes tickerScroll {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+
+.tickerItem {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-gold);
+  letter-spacing: 0.1em;
+}

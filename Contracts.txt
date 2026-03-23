@@ -1,0 +1,336 @@
+Step 1: Initial Project Scaffolding & Theme Config
+Initialize Next.js 14 project with Tailwind CSS. Configure the 'Cyber-Sport' design system in tailwind.config.js using specific colors: Deep Navy (#0B0E14), Electric Purple, Gold, and Neon Pink. Setup the basic layout shell with no rounded corners or soft cards.
+<contract>
+<goal>
+Initialize a Next.js 14 App Router project and configure the 'Cyber-Sport' design system. This includes setting up Tailwind CSS with a custom color palette (Deep Navy, Electric Purple, Gold, Neon Pink), disabling all rounded corners to adhere to the Anti-SaaS aesthetic, and creating a root layout shell that serves as the foundation for high-intensity cricket visualization.
+</goal>
+
+<constraints>
+Strictly NO white backgrounds; use Deep Navy (#0B0E14) as the primary background. Strictly NO rounded corners (border-radius: 0 must be global). Do not use soft 'SaaS-style' cards or shadows. Follow the specified file structure: /src/app for routes and /src/components for shared UI. Colors must strictly include Deep Navy (#0B0E14), Electric Purple, Gold, and Neon Pink. Use Tailwind's configuration to force sharp edges and high-contrast gradients. Project must use Next.js 14 App Router with TypeScript.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A complete project scaffolding including: 1. tailwind.config.ts with the custom 'Cyber-Sport' theme and global 'borderRadius: 0' overrides. 2. src/app/globals.css with the base navy background and high-intensity neon gradient utilities. 3. src/app/layout.tsx and src/app/page.tsx implementing the basic shell using the defined aesthetic. 4. Directory structure setup for /components (dashboard, gaming, chat, stream-layout) and /lib (gemini, data-engine, hooks).
+</format>
+
+<failure_conditions>
+The task is failed if: 1. Any 'rounded' Tailwind classes or CSS properties are present in the output. 2. A white or light-mode background is used. 3. Standard 'soft' UI patterns (like drop-shadows on cards instead of neon glows/gradients) are implemented. 4. The directory structure deviates from the CLAUDE.md specification. 5. Next.js 13 or older conventions are used.
+</failure_conditions>
+</contract>
+
+Generate Contract
+Step 2: Supabase Database & Auth Setup
+Create Supabase tables for profiles, matches, predictions, chat_messages, and match_hype according to the schema. Enable Row Level Security (RLS) and configure Google Social Login.
+<contract>
+<goal>
+Provision the complete Supabase backend infrastructure for Project Cricket Pulse, implementing the exact 5-table schema (profiles, matches, predictions, chat_messages, match_hype), Row Level Security (RLS) policies, and Google-only Social Authentication to support the high-frequency real-time IPL dashboard.
+</goal>
+
+<constraints>
+Strictly adhere to the SQL schema in Section 2 of CLAUDE.md, specifically using 'jsonb' for match momentum and 'bigint' for fan_coins. Enable Google Social Login as the sole authentication method for 1-click conversion. RLS must be enforced: users can only update their own profiles and post predictions/messages; 'matches' and 'match_hype' are public-read. All triggers must support Supabase Realtime for the Hype Meter and fan_coin updates. The 'predictions' table must include the 'ball_index' column as a mandatory field to prevent late-betting exploits.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A single valid SQL migration block containing: 1) custom enum types for match status, bet types, and outcomes, 2) table creation scripts with primary/foreign keys, 3) RLS 'ENABLE' commands and 'CREATE POLICY' statements for each table, and 4) a supplemental text summary of required Supabase Dashboard configurations for Auth and Realtime.
+</format>
+
+<failure_conditions>
+Missing any of the five specified tables or defined columns (especially 'sentiment_score' or 'is_hype_insight'); enabling email/password or other social providers besides Google; failing to set up foreign key relationships between profiles and predictions/chat; omitting RLS policies; or failing to enable PostgreSQL Realtime replication for the 'match_hype' and 'profiles' tables.
+</failure_conditions>
+</contract>
+
+Step 3: Data Ingestion: Scraper Worker
+Build a Node-cron worker in /workers that scrapes public scoreboard JSON endpoints every 2 seconds. Implement a deduplication layer to only push changes to Supabase 'matches' table.
+<contract>
+<goal>
+Implement a high-frequency background worker in /workers using Node-cron that scrapes public scoreboard JSON endpoints every 2 seconds. The worker must transform raw external data into the internal 'matches' schema, perform a deep-equality check (deduplication) against the last known state, and update the Supabase 'matches' table only when state changes occur to minimize DB overhead and prevent UI flickering.
+</goal>
+
+<constraints>
+Strictly utilize 'Jugaad' scraping of public static JSON endpoints; do NOT integrate paid third-party Cricket APIs (e.g., RapidAPI, Opta). The cron must run at exactly 2-second intervals; implement an execution lock to prevent overlapping scrapes if a network request hangs. Deduplication must be performed in-memory or via a local cache before hitting Supabase. You must populate the 'current_momentum_json' and 'win_prob' fields as part of the update. All requests must use custom headers to mimic browser traffic to avoid immediate IP blocking by the source.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A standalone Node.js script (TypeScript preferred) located at /workers/scraper.ts. The file must contain: 1. Supabase Service Role client initialization. 2. An in-memory object 'lastSeenMatchState' for state comparison. 3. A transform function to map raw JSON to the database schema. 4. The node-cron schedule block. 5. Explicit error logging for HTTP 403/429 status codes.
+</format>
+
+<failure_conditions>
+The implementation is considered a failure if: 1. It uses a commercial Cricket API key. 2. It pushes a DB update every 2 seconds regardless of whether the score changed (missing deduplication). 3. It causes a 'race condition' where multiple scrape instances run concurrently. 4. It lacks a try-catch block for malformed JSON, causing the worker process to crash on bad data. 5. It uses a white-background/soft-UI logging dashboard instead of raw console output or the defined Cyber-Sport aesthetic logs.
+</failure_conditions>
+</contract>
+
+Step 4: Real-time WebSocket Relay
+Establish a WebSocket relay using Supabase Realtime or Socket.io to push match updates and momentum data from the backend to the frontend with sub-second latency.
+<contract>
+<goal>
+Establish a high-performance WebSocket relay and Supabase Realtime subscription layer to stream high-frequency match data, momentum JSON, and hype metrics from the scraping worker to the Next.js frontend, ensuring sub-second delivery and synchronization with broadcast latency.
+</goal>
+
+<constraints>
+Implementation must reside in /src/lib/data-engine and /src/hooks. Use Socket.io for the fluid Momentum Heatmap data and Supabase Realtime for Hype Meter/Coin updates. You MUST implement the global match_delay_offset variable to buffer incoming socket messages before committing to frontend state, aligning visuals with the user's broadcast lag. All data updates must pass through a deduplication layer to prevent UI flicker. Strictly avoid any white backgrounds or soft 'SaaS' aesthetics in connection status components; use the Cyber-Sport palette (Deep Navy #0B0E14, Gold, and Neon Pink). Frontend hooks must use heavy memoization to prevent the Three.js Pitch Map from re-rendering on every data burst.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A TypeScript-based Realtime Provider architecture consisting of: 1. A Socket.io relay configuration for high-velocity momentum data. 2. A Supabase subscription client within /src/lib/data-engine. 3. A custom 'useCricketRealtime' hook that manages the match_delay_offset queuing logic. 4. Optimized state update functions that trigger CanvasConfetti or GLSL shaders only on valid delta changes (e.g., wickets or boundaries).
+</format>
+
+<failure_conditions>
+The implementation is considered a failure if: 1. The UI flickers during 2-second scraping updates. 2. The match_delay_offset logic is missing or fails to queue events. 3. The 3D Pitch Map or Momentum Heatmap drops frames due to unoptimized state updates. 4. Data is fetched via standard REST polling instead of a persistent WebSocket/Realtime stream. 5. Any generated status UI uses standard Shadcn/Tailwind default light-mode components instead of the specified Cyber-Sport aesthetic.
+</failure_conditions>
+</contract>
+
+Step 5: Core Live Scoreboard Component
+Develop the high-contrast scoreboard component. Use memoization to prevent unnecessary re-renders during high-frequency data updates. Include placeholders for 'Predicted Final Score'.
+<contract>
+<goal>
+Develop a high-performance, real-time Cricket Scoreboard component for the Next.js 14 dashboard. The component must handle high-frequency data updates (2-second intervals), integrate with the global 'match_delay_offset' state for broadcast synchronization, and include a 'Predicted Final Score' UI placeholder. It must also implement the 'On-Fire' visual state logic for players with a strike rate over 200.
+</goal>
+
+<constraints>
+Strictly follow the 'Anti-SaaS' aesthetic: NO white backgrounds, NO rounded soft cards. Use #0B0E14 (Deep Navy) as the base with Electric Purple, Gold, and Neon Pink high-contrast gradients. Use React.memo() extensively to prevent unnecessary re-renders of the 3D Pitch Map during scoreboard updates. Implement 'On-Fire' states using CSS filter: drop-shadow and an animated fire sprite overlay for players exceeding a 200 strike rate (min 10 balls). All visuals must be synced via the global 'match_delay_offset' variable. Component must reside in /src/components/dashboard.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A single TypeScript React component file (Scoreboard.tsx) using Next.js 14 App Router standards. Use Tailwind CSS for the 'Cyber-Sport' styling and Framer Motion for numerical transitions. The file structure should export a memoized 'Scoreboard' component and internal sub-components for 'TeamStats', 'ActiveBatters', and 'PredictionTicker'.
+</format>
+
+<failure_conditions>
+The task is failed if the UI uses any standard SaaS design patterns (soft shadows, light mode, rounded corners). Failure occurs if the component causes the Three.js Pitch Map to re-render on score updates. Failure occurs if the 'match_delay_offset' logic is ignored, or if the 'On-Fire' visual effect is missing the animated fire sprite requirement. Use of any colors outside the specified palette (#0B0E14, Purple, Gold, Neon Pink) is a direct rejection.
+</failure_conditions>
+</contract>
+
+Step 6: Momentum Heatmap Visualization
+Create a fluid SVG wave graph using Framer Motion that visualizes 'Win Probability' over time. Implement the 'Explosion' visual effect trigger when a boundary is detected in the data stream.
+<contract>
+<goal>
+Develop a high-performance Momentum Heatmap component (MomentumHeatmap.tsx) that renders a fluid, real-time SVG wave graph representing Win Probability (win_prob_a vs win_prob_b) from the matches table. This component must also integrate a visual 'Explosion' effect (using GLSL fragment shaders or CanvasConfetti) that triggers instantly when the data stream detects a boundary (4 or 6), synchronized with the global match_delay_offset.
+</goal>
+
+<constraints>
+Strict adherence to the 'Cyber-Sport' aesthetic: base background must be Deep Navy (#0B0E14), NO white backgrounds, and NO rounded/soft UI cards. The graph must use high-contrast gradients matching team colors (Electric Purple, Gold, or Neon Pink). Use Framer Motion for SVG path transitions to ensure 'momentum' feel. The component must respect the global match_delay_offset state to align visual triggers with the user's stream lag. Use React.memo to prevent unnecessary re-renders during high-frequency updates from the scraping relay. Apply CSS filter: drop-shadow and animated fire sprites if strike rate data exceeds 200.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A single-file Next.js 14 Client Component located at /src/components/dashboard/MomentumHeatmap.tsx. It must export a default functional component utilizing Tailwind CSS for layout, Framer Motion for the wave interpolation, and a useEffect-driven trigger for the boundary explosion. Data should be consumed via the useCricketRealtime custom hook.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. The UI uses standard shadcn/ui rounded components or light mode colors. 2. The wave graph uses a standard charting library (Recharts/Chart.js) without the fluid custom SVG motion required. 3. The boundary explosion ignores the match_delay_offset. 4. The component causes a frame drop below 60fps during data updates. 5. The SVG path flickers or 'jumps' instead of morphing smoothly between data points.
+</failure_conditions>
+</contract>
+
+Step 7: 3D Pitch Map with Three.js
+Implement an arcade-style 3D pitch view using React Three Fiber. Visualize the last 6 balls as spheres on a pitch geometry based on coordinate data from the match JSON.
+<contract>
+<goal>
+Develop a high-performance, arcade-style 3D Pitch Map component using React Three Fiber and Three.js. The component must visualize the trajectory or landing points of the last 6 deliveries as glowing spheres on a stylized 3D cricket pitch, dynamically updating based on incoming match JSON data while adhering to the 'Cyber-Sport' aesthetic defined in the project vision.
+</goal>
+
+<constraints>
+Strictly utilize React Three Fiber (R3F) within the Next.js 14 App Router. Geometry must be optimized using BufferGeometry to ensure zero frame-drops during high-frequency data ingestion. Visually, you must avoid all 'SaaS-style' design patterns; use Deep Navy (#0B0E14) for the environment and high-contrast neon gradients for delivery indicators. Implement React.memo to isolate the 3D Canvas from dashboard-wide state updates. All ball visualizations must respect the global 'match_delay_offset' state to synchronize the 3D animation with the user's specific broadcast lag. The pitch must not use realistic grass textures; it should use a dark, grid-based or GLSL-shaded tech texture consistent with the 'High-Adrenaline' brand.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A standalone React component located at '/src/components/dashboard/PitchMap3D.tsx'. The file should include: 1) A main 'PitchMap' component wrapping the R3F Canvas. 2) A 'BallSphere' sub-component with emissive materials for the 'arcade' glow. 3) A 'PitchGeometry' component using standard Three.js materials with emissive properties. 4) Logic to map the last 6 balls from the 'current_momentum_json' or scorecard data to 3D coordinates. 5) Use of 'useFrame' for any physics or floating animations.
+</format>
+
+<failure_conditions>
+The task is failed if the component uses standard white backgrounds, rounded soft cards, or shadcn/ui defaults. Failure occurs if the 3D scene re-renders the entire Canvas when a chat message is received or a non-related state change occurs. Using high-resolution textures that cause more than 50MB of VRAM usage is a failure. Failure includes ignoring the 'match_delay_offset', resulting in the 3D visualization appearing before the broadcast event. Any implementation using standard HTML/CSS for the pitch instead of a true Three.js WebGL context is unacceptable.
+</failure_conditions>
+</contract>
+
+Step 8: Player 'On-Fire' VFX System
+Build a logic hook that monitors player strike rates and wickets. Create a CSS/Framer Motion wrapper that adds a glowing neon 'flame' aura to player avatars when specific thresholds are met.
+<contract>
+<goal>
+Implement a high-performance React hook (usePlayerFireState) and a Framer Motion wrapper component (PlayerFireVFX) that monitors live match data for 'On-Fire' triggers: Strike Rate > 200 (min 10 balls) or a wicket taken within the last 60 seconds. The system must render a 'Cyber-Sport' neon flame aura using GLSL fragment shaders or CSS filter: drop-shadow with animated fire sprite overlays, synchronized to the user's specific stream latency.
+</goal>
+
+<constraints>
+Strictly NO soft/rounded 'SaaS' UI patterns; use high-contrast gradients (Electric Purple, Gold, Neon Pink) and Deep Navy (#0B0E14) backgrounds. All VFX triggers MUST be piped through the global 'match_delay_offset' state to prevent spoilers ahead of the broadcast. You must wrap the VFX component in React.memo to prevent unnecessary re-renders of the 3D Pitch Map or other dashboard elements. Animations must use GPU-accelerated Framer Motion properties (transform/opacity) or custom GLSL shaders—do not animate layout-heavy properties like height or width.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+Deliver a logic hook in `/src/hooks/usePlayerFireState.ts` and a VFX wrapper component in `/src/components/dashboard/PlayerFireVFX.tsx`. The hook must return a boolean 'isGlowing' and the specific 'intensity' level based on current stats. The component should accept 'children' (the player avatar/card) and wrap them in a Framer Motion container that injects the neon flame sprite overlay and drop-shadow filters.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. The fire effect uses standard Tailwind box-shadows instead of the 'Cyber-Sport' aesthetic specified. 2. The VFX triggers instantly without respecting the 'match_delay_offset'. 3. The implementation causes a re-render of the parent scoreboard or 3D Pitch Map. 4. The code uses white backgrounds or standard rounded-md classes. 5. The strike rate logic fails to validate the 10-ball minimum threshold.
+</failure_conditions>
+</contract>
+
+Step 9: Prediction Engine & Fan-Coins logic
+Develop the prediction UI where users spend 'Fan-Coins' on the next ball outcome. Implement the backend RPC or Edge Function to resolve bets against incoming live data and prevent late-betting exploits.
+<contract>
+<goal>
+Develop a real-time 'Cyber-Sport' prediction interface and backend resolution system where users wager 'Fan-Coins' on the outcome of the next ball. The system must handle high-frequency betting cycles, ensure atomic balance updates via Supabase RPCs, and implement a 'ball_index' lock to prevent exploits where users bet on outcomes already visible in the data feed.
+</goal>
+
+<constraints>
+Strictly adhere to the 'Anti-SaaS' aesthetic: use Deep Navy (#0B0E14) backgrounds, neon gradients (Electric Purple/Gold), and zero rounded corners. All coin transactions must be processed server-side via Supabase Edge Functions or RPCs to prevent client-side manipulation. You must implement the 'late-betting' lock logic by comparing the 'ball_index' of the bet against the latest processed ball in the 'matches' table. Integrate the 'match_delay_offset' global state to ensure the UI betting window closes in sync with the user's specific broadcast lag. Use Framer Motion for 'momentum' animations when a bet is placed and CanvasConfetti for successful resolutions.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+The solution must include: 1. A Next.js client component '/components/gaming/PredictionInterface.tsx' using Framer Motion for high-adrenaline state changes. 2. A custom React hook '/lib/hooks/usePredictionStore.ts' for local state and optimistic UI updates. 3. A Supabase SQL migration file containing the 'predictions' and 'profiles' table updates, plus a 'resolve_prediction' PostgreSQL function. 4. An Edge Function in '/supabase/functions/match-data-sync' to trigger bet resolution when the scraper updates the match status.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. The UI uses default 'soft' design elements like white backgrounds or standard border-radii. 2. Users can place bets on a 'ball_index' that has already been recorded in the matches table. 3. Coin balances are updated via client-side code instead of atomic database operations. 4. The UI fails to account for the 'match_delay_offset', causing a desync between the live stream and the betting window. 5. The implementation lacks high-contrast VFX or GLSL-inspired 'explosion' feedback for winning bets.
+</failure_conditions>
+</contract>
+
+Step 10: Global Hype Meter Component
+Create a high-speed tug-of-war bar component. Use Supabase Realtime to aggregate 'hype clicks' from all users per team and display the live balance.
+<contract>
+<goal>
+Implement a real-time, high-performance 'Tug-of-War' Hype Meter component that aggregates and visualizes global user clicks for two competing teams using Supabase Realtime. The component must reflect the live balance between team_a_clicks and team_b_clicks from the match_hype table, providing an interactive, high-adrenaline feedback loop for users to 'boost' their team.
+</goal>
+
+<constraints>
+Strictly follow the 'Anti-SaaS' aesthetic: NO white backgrounds, NO standard rounded cards; use Deep Navy (#0B0E14) with high-contrast gradients (Electric Purple, Gold, Neon Pink). Use Framer Motion for fluid, momentum-based bar transitions. The component must be wrapped in React.memo to prevent re-renders during high-frequency data streams. All visual state changes must respect the global match_delay_offset logic to ensure the UI syncs with the user's specific broadcast lag. Clicks must be optimistically rendered locally before being synced to the Supabase backend to ensure zero perceived latency.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+The component must be a standalone React component located at /src/components/gaming/HypeMeter.tsx using Next.js 14 App Router conventions. It should utilize the useCricketRealtime hook for database subscriptions and include explicit TypeScript interfaces for the match_hype table schema. Styling must be implemented via Tailwind CSS using the specific project hex codes and custom GLSL-inspired utility classes for neon glows.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. The UI uses default Tailwind 'rounded-lg' or 'shadow-sm' styles typical of SaaS dashboards. 2. The component causes main-thread jank during rapid click bursts. 3. The Supabase Realtime subscription is not properly cleaned up on component unmount. 4. The 'tug-of-war' logic lacks animation or uses linear transitions instead of the requested momentum/fluid physics. 5. The match_delay_offset is ignored, causing the meter to update ahead of the broadcast visual.
+</failure_conditions>
+</contract>
+
+Step 11: AI-Moderated Hype Chat
+Build the chat interface. Integrate Google Gemini Pro to analyze sentiment in real-time. Pinned messages with high sentiment scores should be highlighted as 'Expert Analysis'.
+<contract>
+<goal>
+Develop a real-time 'Hype Chat' component for the Cricket Pulse dashboard that leverages Supabase Realtime for message delivery and Google Gemini Pro for sentiment-based moderation. The primary objective is to automatically identify and pin 'Expert Analysis' messages (sentiment score > 0.8) while maintaining a 'Cyber-Sport' aesthetic and rewarding high-tier users with visual enhancements.
+</goal>
+
+<constraints>
+Strictly avoid standard SaaS aesthetics like white backgrounds or soft, rounded cards; use Deep Navy (#0B0E14) with high-contrast gradients (Electric Purple, Gold, Neon Pink). All messages must be synchronized with the global 'match_delay_offset' state to prevent spoilers. Use React.memo to prevent chat updates from triggering re-renders of the Three.js Pitch Map. Gemini analysis must be handled as a batch or background process to avoid blocking the main UI thread. High-coin users (from the profiles table) must have glowing text effects and exclusive emojis applied via CSS filters and GLSL-inspired glow intensities. Data must strictly follow the chat_messages table schema defined in CLAUDE.md.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+The solution must be delivered as a set of Next.js 14 server and client components within '/src/components/chat/', a Gemini integration utility in '/src/lib/gemini/moderator.ts', and a custom hook 'useChatSync.ts' in '/src/hooks/'. Styling must be implemented using Tailwind CSS with custom hex codes provided in the vision document and Framer Motion for high-adrenaline message entry animations.
+</format>
+
+<failure_conditions>
+The task is failed if the chat UI utilizes any white/light themes or standard 'soft' card designs. It is a failure if 'Expert Analysis' pinning logic uses a threshold other than sentiment_score > 0.8. Failure occurs if the chat causes performance degradation on the 3D Pitch Map or ignores the 'match_delay_offset' timing. Any implementation that uses a standard REST polling mechanism instead of Supabase Realtime or custom WebSockets as defined in the 'Jugaad Strategy' is considered a total failure.
+</failure_conditions>
+</contract>
+
+Step 12: Latency Sync Slider Utility
+Implement a global `match_delay_offset` state. All UI triggers (Confetti, Score updates, 3D animations) must look up this offset to stay in sync with the user's specific broadcast lag.
+<contract>
+<goal>
+Implement a globally synchronized latency management system using a 'match_delay_offset' state (0-60 seconds). This utility must ensure that high-adrenaline visual triggers—including GLSL fragment shader explosions, CanvasConfetti, and Three.js Pitch Map updates—are delayed to perfectly align with the user's specific broadcast lag, preventing 'spoiler' UI updates.
+</goal>
+
+<constraints>
+1. Aesthetic: The slider UI must strictly follow the 'Cyber-Sport' style (Deep Navy #0B0E14, Neon Pink/Gold accents, zero rounded corners). 2. Performance: Moving the slider must not trigger expensive re-renders of the Three.js 3D Pitch Map; use 'memo' or a ref-based subscription for high-frequency data. 3. State Management: Implement via a specialized React Context or a robust 'useLatencySync' hook stored in '/src/lib/hooks'. 4. Persistence: The offset value must persist in localStorage to maintain user settings across sessions. 5. Logic: All incoming WebSocket/Realtime events must enter a buffer queue and only be 'released' to the UI components after the 'match_delay_offset' duration has elapsed.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+1. A 'LatencyProvider' component wrapping the root layout in '/src/app'. 2. A custom hook 'useLatencySync' that returns the current offset and a 'syncDelay(callback, eventTime)' function. 3. A 'LatencySlider' component in '/src/components/dashboard' using Framer Motion for high-contrast neon visual feedback. 4. Integration examples showing how 'useCricketRealtime' events are piped through the delay logic before triggering 'CanvasConfetti'.
+</format>
+
+<failure_conditions>
+1. Any use of light-mode backgrounds, soft shadows, or standard Shadcn/Radix default styling. 2. Visual triggers firing immediately upon data receipt regardless of the slider value. 3. Jittery animations or frame drops when the slider is adjusted during live data streams. 4. Storing the global offset in a way that causes the entire 3D Pitch Map component tree to re-mount on every value change.
+</failure_conditions>
+</contract>
+
+Step 13: YouTube Stream Layout Optimized View
+Design a specific route (/stream) with a layout optimized for OBS capture: Large 3D Pitch Map center-stage, scrolling news ticker at the bottom, and top-tier chat messages prominently displayed.
+<contract>
+<goal>
+Implement a broadcast-optimized Next.js route at '/stream' designed specifically for OBS capture and YouTube streaming. The layout must integrate a center-stage Three.js 3D Pitch Map, a high-frequency real-time scrolling news ticker at the bottom fed by Gemini-processed data, and a 'High-Hype' chat overlay featuring only messages with sentiment scores above 0.8. The interface must utilize the 'Cyber-Sport' aesthetic with reactive GLSL fragment shaders for boundary events.
+</goal>
+
+<constraints>
+Strictly prohibit white backgrounds, soft UI cards, or rounded corners; use Deep Navy (#0B0E14) as the base. All visual components must respect the 'match_delay_offset' global state to sync with stream latency. High-frequency UI updates must use React 'memo' and 'useMemo' to prevent performance degradation of the Three.js canvas. Colors are restricted to Electric Purple, Gold, and Neon Pink gradients. Data for the chat component must be filtered to show only 'is_hype_insight: true' or 'sentiment_score > 0.8' records from Supabase.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+A Next.js 14 App Router page directory at '/src/app/stream/page.tsx' coordinating components from '/src/components/stream-layout/'. Expected files: 'PitchMap3D.tsx' (Three.js), 'ScrollingTicker.tsx' (Framer Motion), and 'BroadcastChat.tsx' (Supabase Realtime). Styling must be implemented via Tailwind CSS using the project-specific HEX codes and high-contrast 'Anti-SaaS' design patterns defined in CLAUDE.md.
+</format>
+
+<failure_conditions>
+The task is failed if: 1) Any standard 'shadcn/ui' or 'Radix' component is used with default rounded styling. 2) The 3D Pitch Map causes frame drops due to lack of component memoization. 3) The 'match_delay_offset' logic is missing from the state-to-render pipeline. 4) The layout uses a layout structure unsuitable for a 16:9 OBS window (e.g., excessive padding or non-collapsible sidebars). 5) The news ticker is static rather than an animated 'Jugaad' data stream.
+</failure_conditions>
+</contract>
+
+Step 14: Chrome Extension: Manifest & Overlay Shell
+Setup a Manifest V3 extension in the /extension directory. Implement a content script that creates a Shadow DOM sidebar overlay on top of official broadcaster domains.
+<contract>
+<goal>
+Initialize a robust Manifest V3 Chrome Extension framework in the /extension directory that injects a high-performance React-based Shadow DOM sidebar onto broadcaster domains. The primary objective is to establish the 'Overlay Shell' which serves as the host for real-time visualization, prediction stocks, and the momentum heatmap without contaminating the host page's global styles.
+</goal>
+
+<constraints>
+1. Must use Manifest V3 exclusively. 2. Implementation MUST utilize Shadow DOM for the content script to ensure CSS isolation. 3. STRICT ADHERENCE to 'Anti-SaaS' aesthetic: Use Deep Navy (#0B0E14) for backgrounds; NO white backgrounds (#FFFFFF) or standard rounded soft cards. 4. Use high-contrast gradients (Electric Purple/Gold/Neon Pink) for UI accents. 5. Must include a global 'match_delay_offset' state variable in the overlay's root store to handle stream synchronization. 6. All UI must be optimized for 'Cyber-Sport' momentum: Use Framer Motion for the sidebar's sliding entry/exit animations.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+The output must adhere to the following file structure: 1. '/extension/manifest.json' (V3, specifying content_scripts and web_accessible_resources). 2. '/extension/src/content-scripts/main.tsx' (React mount logic with Shadow Root creation). 3. '/extension/src/components/SidebarOverlay.tsx' (The main UI container using Deep Navy styling). 4. '/extension/src/styles/overlay-globals.css' (CSS-in-JS or raw CSS targeting Shadow DOM elements with the prescribed color palette).
+</format>
+
+<failure_conditions>
+1. Use of Manifest V2 or deprecated Chrome APIs. 2. CSS leakage where the host site's styles affect the extension or the extension's styles affect the host site (Shadow DOM violation). 3. Use of standard 'SaaS-style' design components (e.g., standard shadcn/ui defaults with rounded corners and white backgrounds). 4. Missing the 'match_delay_offset' state logic. 5. Hardcoding broadcaster URLs instead of using a flexible content_script matching pattern.
+</failure_conditions>
+</contract>
+
+Step 15: Chrome Extension: Broadcast Sync & Alerts
+Build the 'Sync' feature in the extension that allows users to align the dashboard clock with the video player. Implement browser notifications for 'Thriller Alerts' based on live match intensity.
+<contract>
+<goal>
+Develop a high-precision synchronization engine and alerting system for the Project Cricket Pulse Chrome Extension. The primary objective is to implement a manual latency adjustment interface that updates a global 'match_delay_offset' state, ensuring the overlay data (score, momentum, hype) aligns perfectly with the user's broadcast stream. Additionally, implement a 'Thriller Alert' system that triggers system-level browser notifications based on real-time data spikes in the match momentum and win probability shift logic.
+</goal>
+
+<constraints>
+Strictly adhere to the Manifest V3 specification. Use React with Shadow DOM for the content script overlay to prevent CSS contamination with the broadcaster's site. Use the 'Cyber-Sport' aesthetic: strictly #0B0E14 background, zero rounded corners (no soft cards), and high-contrast gradients (Electric Purple, Gold, Neon Pink). All visual triggers must be gated by the 'match_delay_offset' variable. You must use the 'chrome.notifications' API for alerts. Data ingestion must leverage the existing Supabase Realtime/WebSocket relay logic to avoid expensive API overhead. UI components must be wrapped in 'React.memo' to handle the 2-second high-frequency data refresh without causing browser lag during intensive stream rendering.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+The output must include: 1. A React 'SyncController' component located in '/extension/src/content-scripts' featuring a high-precision range slider for millisecond-level offset adjustments. 2. A 'NotificationEngine' script in the extension background service worker that monitors the 'matches' and 'match_hype' tables. 3. Updated global state management in '/extension/src/hooks/useSyncStore' to persist the offset across page reloads. 4. CSS-in-JS or Tailwind config that enforces the sharp-edged, high-adrenaline visual style defined in CLAUDE.md section 4.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. The overlay uses a standard browser alert or generic HTML elements instead of a Shadow DOM implementation. 2. Any UI element uses a white background or border-radius greater than 0px. 3. The 'match_delay_offset' is hardcoded rather than being a dynamic user-controlled state. 4. The extension causes performance degradation on the host streaming site due to excessive re-renders. 5. The notification logic triggers on every boundary rather than 'Thriller' events (defined as significant momentum shifts or win probability swings >15% in a single ball).
+</failure_conditions>
+</contract>
+
+Step 16: VFX Polish: GLSL Fragment Shaders
+Integrate custom GLSL shaders for background effects and boundary 'explosions' to ensure the dashboard feels 'mesmerizing' and high-end rather than a standard web app.
+<contract>
+<goal>
+Develop and integrate high-performance GLSL fragment shaders to drive the 'Cyber-Sport' aesthetic. This includes a mesmerizing dynamic background for the main dashboard and specialized VFX 'explosions' triggered by boundaries (4s, 6s) and wickets. The shaders must visually communicate intensity using the project's signature color palette (Deep Navy, Electric Purple, Gold, Neon Pink) and maintain 60FPS performance during high-frequency data updates.
+</goal>
+
+<constraints>
+Strictly follow the 'Anti-SaaS' aesthetic: no white backgrounds, no soft rounded cards, and no standard Tailwind 'slate' or 'gray' color scales. Use #0B0E14 as the base depth. Shaders must be responsive and integrated via React-Three-Fiber or raw WebGL within the Next.js 14 App Router structure. All boundary-triggered VFX must respect the global 'match_delay_offset' state variable to ensure visual explosions sync perfectly with the user's delayed broadcast stream. The 'On-Fire' state shader must specifically trigger when a player's strike rate exceeds 200 (min 10 balls) using an animated fire sprite overlay/fragment shader. Heavy use of React.memo is required to ensure shader calculations do not trigger unnecessary re-renders of the 3D Pitch Map or Scoreboard components.
+Read CLAUDE.md before beginning.
+</constraints>
+
+<format>
+Deliver a set of reusable GLSL (.frag) files and corresponding React wrapper components located in '/src/components/dashboard/vfx'. The implementation should include: 1. A 'CyberBackground' component using a noise-based fragment shader. 2. An 'EventExplosion' component that accepts 'type' (four, six, wicket) and 'teamColor' as props. 3. A 'VFXProvider' context to manage global shader uniforms (time, resolution, match_delay). All code must be TypeScript-strict with documented uniform inputs.
+</format>
+
+<failure_conditions>
+The task is failed if: 1. Standard CSS transitions or simple GIF assets are used instead of GPU-accelerated GLSL shaders for explosions. 2. The dashboard frame rate drops below 60FPS on mid-range hardware. 3. The shaders use standard 'web-safe' colors instead of the specific team-branded gradients (Electric Purple, Gold, Neon Pink). 4. The VFX trigger instantly upon data arrival instead of waiting for the 'match_delay_offset' duration. 5. The shader code is bundled in a way that blocks the hydration of the Supabase Realtime/Socket.io data feeds.
+</failure_conditions>
+</contract>
