@@ -35,7 +35,7 @@ const ScoreCard: React.FC<{ player: Player }> = ({ player }) => {
         </div>
         <div className={styles.statGroupSmall}>
           <span className={styles.label}>SR:</span>
-          <span className={styles.val}>{player.strikeRate.toFixed(1)}</span>
+          <span className={styles.val}>{(player.strikeRate || 0).toFixed(1)}</span>
         </div>
       </div>
 

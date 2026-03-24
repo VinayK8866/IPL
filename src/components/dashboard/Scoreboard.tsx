@@ -60,7 +60,7 @@ const ActiveBatter = React.memo(({ batter }: { batter: Batter }) => {
           <div className="flex flex-col items-end">
             <span className="text-[9px] text-gray-500 font-bold uppercase">Strike Rate</span>
             <span className={`text-xs font-black italic ${isOnFire ? 'text-[#FF3366]' : 'text-white'}`}>
-              {batter.strikeRate.toFixed(1)}
+              {(batter.strikeRate || 0).toFixed(1)}
             </span>
           </div>
         </div>
@@ -103,7 +103,7 @@ const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
         <span className="text-xs font-black text-[#FFD700] uppercase tracking-widest">{score.team_a} vs {score.team_b}</span>
         <div className="mt-2 text-right">
           <div className="text-[10px] text-gray-500 font-bold uppercase leading-none">Net Run Rate</div>
-          <div className="text-lg font-black italic text-white leading-none mt-1">{score.crr.toFixed(2)}</div>
+          <div className="text-lg font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</div>
         </div>
       </div>
     </div>
@@ -112,7 +112,7 @@ const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
     <div className="bg-[#1A1F29] border-l-2 border-[#FFD700] p-2 flex justify-between items-center">
       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Predicted Target</span>
       <span className="text-sm font-black italic text-[#FFD700]">
-        ~{score.predicted_score || Math.round(score.crr * 20)}
+        ~{score.predicted_score || Math.round((score.crr || 0) * 20)}
       </span>
     </div>
   </div>

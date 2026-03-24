@@ -2,7 +2,7 @@ import { io, Socket } from "socket.io-client";
 import { MomentumData } from "./types";
 
 // Note: In local dev, this points to our relay process
-const MOMENTUM_RELAY_URL = process.env.NEXT_PUBLIC_MOMENTUM_RELAY_URL || "http://localhost:3001";
+const MOMENTUM_RELAY_URL = process.env.NEXT_PUBLIC_RELAY_SERVER_URL || "http://localhost:3001";
 
 class MomentumSocket {
   private socket: Socket | null = null;

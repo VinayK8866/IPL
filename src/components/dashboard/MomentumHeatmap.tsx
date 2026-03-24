@@ -66,11 +66,11 @@ const MomentumHeatmap: React.FC<MomentumHeatmapProps> = React.memo(({ matchId })
         <div className="flex gap-4">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#7A3FE1]" />
-            <span className="text-[9px] font-bold text-gray-400">TEAM A {score ? Math.round(score.win_prob_a * 100) : 50}%</span>
+            <span className="text-[9px] font-bold text-gray-400">TEAM A {score ? Math.round((score.win_prob_a || 0.5) * 100) : 50}%</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#FF3366]" />
-            <span className="text-[9px] font-bold text-gray-400">TEAM B {score ? Math.round(score.win_prob_b * 100) : 50}%</span>
+            <span className="text-[9px] font-bold text-gray-400">TEAM B {score ? Math.round((score.win_prob_b || 0.5) * 100) : 50}%</span>
           </div>
         </div>
       </div>

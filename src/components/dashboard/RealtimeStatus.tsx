@@ -38,7 +38,7 @@ export function RealtimeStatus({ matchId }: RealtimeStatusProps) {
             <div className="flex flex-col items-center">
               <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Momentum</span>
               <span className="text-[#FFD700] font-black text-xs italic">
-                {momentum?.momentum_score.toFixed(1) || '0.0'}
+                {(momentum?.momentum_score || 0).toFixed(1)}
               </span>
             </div>
 
