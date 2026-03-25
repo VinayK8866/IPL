@@ -20,6 +20,7 @@ CREATE TABLE matches (
   win_prob_a FLOAT DEFAULT 0.5,
   win_prob_b FLOAT DEFAULT 0.5,
   current_momentum_json JSONB, -- Stores wave graph history
+  live_commentary JSONB DEFAULT '[]'::jsonb, -- NEW: Stores scraped text commentary
   status match_status DEFAULT 'scheduled',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

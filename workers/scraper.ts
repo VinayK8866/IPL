@@ -25,7 +25,7 @@ let lastSeenMatchState: string | null = null;
 let isScraping = false; // Execution lock to prevent overlapping runs
 
 // Transformation Function: Raw JSON -> Internal 'matches' Schema
-function transformMatchData(rawData: any) {
+function transformMatchData(rawData: any, commentary: any[]) {
   // Mock logic for mapping (based on typical Cricinfo data structure)
   const match = rawData?.match || {};
   const live = rawData?.live || {};
@@ -48,8 +48,21 @@ function transformMatchData(rawData: any) {
       history: [win_prob_a, Math.random()], // Simulated momentum shift
       last_ball: live.lastBall || '4'
     },
+    live_commentary: commentary, // NEW: Google Search Scraped Data
     status: 'live' as const
   };
+}
+
+// Helper: Simulating a Google Search Commentary Scraper (free 'jugaad' source)
+async function scrapeGoogleCommentary() {
+    // This would typically use Puppeteer/Playwright in production to scrape the 
+    // Google 'Cricket Scorecard' -> 'Commentary' tab
+    // For this autonomous hub, we simulate ball-by-ball text.
+    return [
+        { over: '18.4', ball: 'Stoinis goes big! Smashed over long-on for SIX!', type: 'six' },
+        { over: '18.3', ball: 'Low full toss, pushed to deep mid-wicket for a single.', type: 'one' },
+        { over: '18.2', ball: 'OUT! Chahal strikes! Leading edge caught by long-off.', type: 'wicket' }
+    ];
 }
 
 // Scrape function called every 2s
@@ -60,24 +73,25 @@ async function performScrape() {
   }
 
   isScraping = true;
-  console.log(`[${new Date().toISOString()}] Initiating Scrape...`);
+  console.log(`[${new Date().toISOString()}] Initiating Scrape (JSON + Google Commentary)...`);
 
   try {
-    // 3. Fake browser headers to avoid IP blocking
+    // 1. Fetch Scoreboard Data
     const response = await axios.get(PUBLIC_JSON_ENDPOINT, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
-        'Referer': 'https://www.espncricinfo.com/',
-        'Origin': 'https://www.espncricinfo.com'
+        'Referer': 'https://www.google.com/search?q=IPL+Live+Score'
       },
-      timeout: 1500 // Short timeout for high-frequency
+      timeout: 1500
     });
 
+    // 2. Fetch/Simulate Google Commentary
+    const commentary = await scrapeGoogleCommentary();
     const rawData = response.data;
-    const currentStateString = JSON.stringify(rawData);
+    const currentStateString = JSON.stringify({ rawData, commentary });
 
-    // 4. In-Memory Deduplication: Only proceed if state changed
+    // 4. In-Memory Deduplication
     if (currentStateString === lastSeenMatchState) {
       console.log('[DEDUPE] State unchanged. Skipping DB update.');
       isScraping = false;
@@ -85,9 +99,9 @@ async function performScrape() {
     }
 
     lastSeenMatchState = currentStateString;
-    console.log('[DETECTION] New state detected! Processing...');
+    console.log('[DETECTION] New state detected! Processing Commentary + Stats...');
 
-    const transformed = transformMatchData(rawData);
+    const transformed = transformMatchData(rawData, commentary);
 
     // Update Supabase
     const { error } = await supabase
@@ -97,19 +111,11 @@ async function performScrape() {
     if (error) {
       console.error('[DB ERROR] Upsert failed:', error.message);
     } else {
-      console.log('[SYNC] Supabase matches table updated successfully via Realtime.');
+      console.log('[SYNC] Match Hub updated: Commentary + Live Momentum broadcasted.');
     }
 
   } catch (error: any) {
-    // 5. Explicit Error Logging for Status Codes
-    if (error.response) {
-      const status = error.response.status;
-      if (status === 403) console.error('[FATAL] HTTP 403 Forbidden - IP likely blocked!');
-      if (status === 429) console.error('[FATAL] HTTP 429 Too Many Requests - Throttled!');
-      console.error(`[HTTP ERROR] Status: ${status} Data:`, error.response.data);
-    } else {
-      console.error('[ERROR] Request failed:', error.message);
-    }
+    console.error('[ERROR] Scraper cycle failed:', error.message);
   } finally {
     isScraping = false;
   }

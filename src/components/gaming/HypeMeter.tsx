@@ -4,6 +4,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
 import { useCricketRealtime } from '../../hooks/useCricketRealtime';
 import { supabase } from '../../lib/supabaseClient';
+import { HypeBurst } from '../dashboard/HypeBurst';
 
 /**
  * PROJECT CRICKET PULSE - GLOBAL HYPE METER
@@ -20,10 +21,21 @@ interface HypeMeterProps {
 
 export const HypeMeter = React.memo(({ 
   matchId, 
-  teamA = { name: 'CSK', color: '#FFD700' }, 
-  teamB = { name: 'KKR', color: '#7A3FE1' } 
+  teamA: propTeamA, 
+  teamB: propTeamB 
 }: HypeMeterProps) => {
-  const { hype } = useCricketRealtime(matchId);
+  const { hype, score } = useCricketRealtime(matchId);
+  
+  // Resolve team names and colors: Props > Live Data > Defaults
+  const teamA = useMemo(() => ({
+    name: propTeamA?.name || score?.team_a || 'TEAM A',
+    color: propTeamA?.color || '#FFD700'
+  }), [propTeamA, score?.team_a]);
+
+  const teamB = useMemo(() => ({
+    name: propTeamB?.name || score?.team_b || 'TEAM B',
+    color: propTeamB?.color || '#7A3FE1'
+  }), [propTeamB, score?.team_b]);
   
   // Local session click buffers for ZERO-LATENCY feedback
   const [localClicksA, setLocalClicksA] = useState(0);
@@ -147,6 +159,8 @@ export const HypeMeter = React.memo(({
           Boost {teamB.name}
         </motion.button>
       </div>
+
+      <HypeBurst />
 
       {/* Latency Sync Ticker */}
       <div className="flex justify-center mt-4">

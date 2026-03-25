@@ -24,6 +24,54 @@ const SERIES_IDS = ['8048', '1527930', '1508731'];
 
 let isShuttingDown = false;
 
+const matchStates = {}; // Track last resolved ball_index per match
+
+async function resolveBetsForMatch(matchId, seriesId, currentOvers) {
+    if (!supabase) return;
+
+    try {
+        const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${matchId}`;
+        const response = await axios.get(summaryUrl, { timeout: 10000 });
+        const plays = response.data.plays || {};
+        
+        // Get the most recent play by finding the max sequence
+        const playKeys = Object.keys(plays);
+        if (playKeys.length === 0) return;
+        
+        const latestPlayKey = playKeys.sort((a, b) => plays[b].sequence - plays[a].sequence)[0];
+        const play = plays[latestPlayKey];
+        
+        if (!play || !play.over) return;
+
+        // Calculate ball index: (over - 1) * 6 + ball
+        const ballIndex = (play.over.number - 1) * 6 + play.over.ball;
+        
+        // Detect outcome
+        let outcome = 'other';
+        if (play.dismissal && play.dismissal.dismissal) outcome = 'wicket';
+        else if (play.scoreValue === 6) outcome = '6';
+        else if (play.scoreValue === 4) outcome = '4';
+        else if (play.scoreValue === 0 && !play.innings.wides && !play.innings.noBalls) outcome = 'dot';
+
+        // Only resolve if it's a new ball
+        if (matchStates[matchId] !== ballIndex) {
+            console.log(`[Resolution] Match ${matchId} Ball ${ballIndex} Outcome: ${outcome}`);
+            
+            const { error } = await supabase.rpc('resolve_predictions', {
+                p_match_id: matchId,
+                p_ball_index: ballIndex,
+                p_outcome: outcome
+            });
+
+            if (error) console.error(`[Resolution] Error resolving match ${matchId}:`, error.message);
+            else matchStates[matchId] = ballIndex;
+        }
+
+    } catch (err) {
+        console.error(`[Resolution] Failed to fetch summary for ${matchId}:`, err.message);
+    }
+}
+
 async function scrapeScores() {
   if (isShuttingDown) return;
 
@@ -43,12 +91,14 @@ async function scrapeScores() {
     const responses = await Promise.all(fetchPromises);
     const allMatches = [];
 
-    responses.forEach((response, idx) => {
+    for (let i = 0; i < responses.length; i++) {
+        const response = responses[i];
+        const seriesId = SERIES_IDS[i];
         const data = response.data;
         const events = data.events || [];
-        const seriesName = data.leagues?.[0]?.name || (SERIES_IDS[idx] === '8048' ? 'Indian Premier League' : 'International');
+        const seriesName = data.leagues?.[0]?.name || (seriesId === '8048' ? 'Indian Premier League' : 'International');
 
-        const parsedMatches = events.map((event) => {
+        for (const event of events) {
             const competitors = event.competitions?.[0]?.competitors || [];
             const status = event.status || {};
             const state = status.type?.state || 'pre';
@@ -62,10 +112,20 @@ async function scrapeScores() {
             const team1 = competitors.find(c => c.homeAway === 'home') || competitors[0];
             const team2 = competitors.find(c => c.homeAway === 'away') || competitors[1];
 
-            if (!team1 || !team2) return null;
+            if (!team1 || !team2) continue;
 
-            return {
-                id: event.id || Math.random().toString(),
+            const matchId = event.id || Math.random().toString();
+            const teamA_overs = team1.linescores?.[0]?.displayValue || '';
+            const teamB_overs = team2.linescores?.[0]?.displayValue || '';
+            const currentOvers = mappedStatus === 'LIVE' ? (teamA_overs || teamB_overs) : '';
+
+            // TRIGGER RESOLUTION FOR LIVE MATCHES
+            if (mappedStatus === 'LIVE') {
+                await resolveBetsForMatch(matchId, seriesId, currentOvers);
+            }
+
+            allMatches.push({
+                id: matchId,
                 name: event.name || `${team1.team?.displayName} vs ${team2.team?.displayName}`,
                 series: seriesName,
                 status: mappedStatus,
@@ -73,20 +133,18 @@ async function scrapeScores() {
                 teamA: {
                     name: team1.team?.displayName || team1.team?.shortDisplayName || 'TBA',
                     score: team1.score || '',
-                    overs: team1.linescores?.[0]?.displayValue || '',
+                    overs: teamA_overs,
                     isBatting: team1.curatedRank?.toString() === '1'
                 },
                 teamB: {
                     name: team2.team?.displayName || team2.team?.shortDisplayName || 'TBA',
                     score: team2.score || '',
-                    overs: team2.linescores?.[0]?.displayValue || '',
+                    overs: teamB_overs,
                     isBatting: team2.curatedRank?.toString() === '2'
                 }
-            };
-        }).filter(Boolean);
-
-        allMatches.push(...parsedMatches);
-    });
+            });
+        }
+    }
 
     console.log(`[Scraper] Successfully parsed ${allMatches.length} total matches from multiple series.`);
 

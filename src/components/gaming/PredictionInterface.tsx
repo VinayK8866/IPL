@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePredictionStore } from '../../lib/hooks/usePredictionStore';
-import { global_match_delay_offset } from '../../hooks/useCricketRealtime';
+import { useLatency } from '@/providers/LatencyProvider';
 import confetti from 'canvas-confetti';
 
 /**
@@ -29,6 +29,7 @@ const OUTCOMES = [
 
 export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId, matchId }) => {
   const { balance, activeBallIndex, placeBet, isSyncing } = usePredictionStore(userId, matchId);
+  const { offset } = useLatency();
   const [selectedAmount, setSelectedAmount] = useState<number>(100);
   const [lastWin, setLastWin] = useState<number | null>(null);
 
@@ -128,7 +129,7 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
       <div className="mt-6 flex items-center justify-center gap-4 bg-white/5 p-2 skew-x-[-5deg]">
         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-          Sync Active: Lag Override {global_match_delay_offset.value}s
+          Sync Active: Lag Override {offset}s
         </span>
       </div>
 

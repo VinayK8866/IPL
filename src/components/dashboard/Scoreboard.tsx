@@ -29,58 +29,41 @@ const Counter = React.memo(({ value, className }: { value: string | number; clas
 ));
 Counter.displayName = 'Counter';
 
+import { usePlayerFireState } from '../../hooks/usePlayerFireState';
+import { PlayerFireVFX } from './PlayerFireVFX';
+
 // Sub-component: Active Batter Card
-const ActiveBatter = React.memo(({ batter }: { batter: Batter }) => {
-  const isOnFire = batter.strikeRate >= 200 && batter.balls >= 10;
+const ActiveBatter = React.memo(({ batter, matchId }: { batter: Batter; matchId: string }) => {
+  const { isGlowing, intensity } = usePlayerFireState(batter.name, matchId);
 
   return (
-    <div className={`relative p-4 bg-[#1A1F29]/80 border-l-2 ${isOnFire ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden group select-none`}>
-      {/* Animated Fire Sprite Overlay (Global CSS) */}
-      {isOnFire && (
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden opacity-50">
-           <div className="fire-sprite-overlay absolute bottom-0 left-0 w-full h-[150%]" />
-        </div>
-      )}
-
-      <div className="relative z-10 flex flex-col gap-1">
-        <div className="flex justify-between items-center">
-          <span className="font-black italic text-sm tracking-tighter text-white uppercase truncate">
-            {batter.name}
-          </span>
-          {isOnFire && (
-            <span className="text-[10px] font-black bg-[#FF3366] px-1 animate-pulse text-white">ON FIRE</span>
-          )}
-        </div>
-        
-        <div className="flex justify-between items-end">
-          <div className="flex items-baseline gap-1">
-            <Counter value={batter.runs} className="text-2xl font-black text-[#FFD700]" />
-            <span className="text-xs text-gray-500 font-bold">({batter.balls})</span>
-          </div>
-          <div className="flex flex-col items-end">
-            <span className="text-[9px] text-gray-500 font-bold uppercase">Strike Rate</span>
-            <span className={`text-xs font-black italic ${isOnFire ? 'text-[#FF3366]' : 'text-white'}`}>
-              {(batter.strikeRate || 0).toFixed(1)}
+    <PlayerFireVFX isGlowing={isGlowing} intensity={intensity}>
+      <div className={`relative p-4 bg-[#1A1F29]/95 border-l-2 ${isGlowing ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden group select-none h-full`}>
+        <div className="relative z-10 flex flex-col gap-1">
+          <div className="flex justify-between items-center">
+            <span className="font-black italic text-[11px] tracking-tighter text-white uppercase truncate max-w-[80px]">
+              {batter.name}
             </span>
+            {isGlowing && (
+              <span className="text-[8px] font-black bg-[#FF3366] px-1 animate-pulse text-white shadow-[0_0_8px_#FF3366]">HOT</span>
+            )}
+          </div>
+          
+          <div className="flex justify-between items-end mt-1">
+            <div className="flex items-baseline gap-1">
+              <Counter value={batter.runs} className="text-xl font-black text-[#FFD700] tabular-nums" />
+              <span className="text-[10px] text-gray-600 font-bold">({batter.balls})</span>
+            </div>
+            <div className="flex flex-col items-end">
+              <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest">SR</span>
+              <span className={`text-[11px] font-black italic ${isGlowing ? 'text-[#FF3366]' : 'text-white'}`}>
+                {(batter.strikeRate || 0).toFixed(0)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
-
-      <style jsx>{`
-        .fire-sprite {
-          background-size: 200% 200%;
-          filter: blur(4px);
-        }
-        @keyframes flicker {
-          0% { transform: translateY(10%) scaleY(1); opacity: 0.3; }
-          50% { transform: translateY(0%) scaleY(1.2); opacity: 0.6; }
-          100% { transform: translateY(10%) scaleY(1); opacity: 0.3; }
-        }
-        .animate-flicker {
-          animation: flicker 0.8s infinite ease-in-out;
-        }
-      `}</style>
-    </div>
+    </PlayerFireVFX>
   );
 });
 ActiveBatter.displayName = 'ActiveBatter';
@@ -99,11 +82,11 @@ const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
         </div>
       </div>
       
-      <div className="flex flex-col items-end">
-        <span className="text-xs font-black text-[#FFD700] uppercase tracking-widest">{score.team_a} vs {score.team_b}</span>
+      <div className="flex flex-col items-end shrink-0 ml-4">
+        <span className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest text-right">{score.team_a} vs {score.team_b}</span>
         <div className="mt-2 text-right">
-          <div className="text-[10px] text-gray-500 font-bold uppercase leading-none">Net Run Rate</div>
-          <div className="text-lg font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</div>
+          <div className="text-[8px] text-gray-400 font-black uppercase leading-none tracking-tighter">Net Run Rate</div>
+          <div className="text-xl font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</div>
         </div>
       </div>
     </div>
@@ -174,9 +157,9 @@ export const Scoreboard = React.memo(({ matchId }: { matchId: string }) => {
       <TeamStats score={currentScore} />
       
       {currentScore.batters.length > 0 && (
-        <div className="grid grid-cols-2 gap-px bg-white/5">
+        <div className="grid grid-cols-2 gap-px bg-white/5 border border-white/5">
           {currentScore.batters.map((batter, idx) => (
-            <ActiveBatter key={`${batter.name}-${idx}`} batter={batter} />
+            <ActiveBatter key={`${batter.name}-${idx}`} batter={batter} matchId={matchId} />
           ))}
         </div>
       )}

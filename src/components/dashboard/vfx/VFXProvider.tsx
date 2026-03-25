@@ -18,7 +18,7 @@ interface VFXContextType {
     uResolution: { value: THREE.Vector2 };
     uGlobalHype: { value: number };
   };
-  triggerExplosion: (type: 'four' | 'six' | 'wicket', teamColor: string) => void;
+  triggerExplosion: (type: 'four' | 'six' | 'wicket', teamColor: string, eventTime?: number) => void;
   activeExplosion: { type: 'four' | 'six' | 'wicket'; teamColor: string; id: number } | null;
 }
 
@@ -48,7 +48,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [uniforms]);
 
   // Synchronized trigger system
-  const triggerExplosion = (type: 'four' | 'six' | 'wicket', teamColor: string) => {
+  const triggerExplosion = (type: 'four' | 'six' | 'wicket', teamColor: string, eventTime?: number) => {
     // Pipe the visual trigger through the global sync delay
     syncDelay(() => {
       setActiveExplosion({ type, teamColor, id: Date.now() });
@@ -57,7 +57,7 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setTimeout(() => {
         setActiveExplosion(null);
       }, 5000); 
-    });
+    }, eventTime);
   };
 
   return (

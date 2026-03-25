@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "data-engine": "node workers/data_scraper.js"
+    "data-engine": "node workers/data_scraper.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm run data-engine\""
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -38,6 +39,7 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.183.1",
     "autoprefixer": "^10.4.27",
+    "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
     "postcss": "^8.5.8",

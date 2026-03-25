@@ -10,6 +10,7 @@ socket.on("connect", () => {
 
 socket.on("data_update", (data) => {
     console.log("--- RECEIVED UPDATE ---");
+    console.log("FULL DATA:", JSON.stringify(data, null, 2));
     console.log(`Match: ${data.team_a} vs ${data.team_b}`);
     console.log(`Score: ${data.score} (${data.overs} Overs)`);
     console.log(`Win Probability: ${data.team_a} (${(data.win_prob_a * 100).toFixed(1)}%)`);
