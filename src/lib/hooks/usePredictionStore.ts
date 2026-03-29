@@ -52,7 +52,7 @@ export function usePredictionStore(userId: string | null, matchId: string) {
         schema: 'public', 
         table: 'profiles', 
         filter: `id=eq.${userId}` 
-      }, (payload) => {
+      }, (payload: any) => {
         setBalance(Number(payload.new.fan_coins));
       })
       .subscribe();
@@ -63,7 +63,7 @@ export function usePredictionStore(userId: string | null, matchId: string) {
         schema: 'public', 
         table: 'matches', 
         filter: `id=eq.${matchId}` 
-      }, (payload) => {
+      }, (payload: any) => {
         setActiveBallIndex(payload.new.current_ball_index);
       })
       .subscribe();

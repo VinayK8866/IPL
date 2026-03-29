@@ -55,6 +55,7 @@ export interface MatchScore {
   batters: Batter[];
   bowlers: Bowler[]; // Added bowlers list
   last_balls: BallData[];
+  status?: string;
   status_text?: string;
   predicted_score?: number;
   live_commentary?: any[];

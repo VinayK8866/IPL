@@ -49,7 +49,7 @@ export const BroadcastChat = React.memo(({ matchId }: BroadcastChatProps) => {
         schema: 'public', 
         table: 'chat_messages',
         filter: `match_id=eq.${matchId}`
-      }, async (payload) => {
+      }, async (payload: any) => {
         const msg = payload.new as ChatMessageType;
         
         // Filter criteria: Sentiment > 0.8 or expert insight

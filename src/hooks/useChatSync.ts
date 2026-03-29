@@ -43,7 +43,7 @@ export function useChatSync(matchId: string) {
         schema: 'public',
         table: 'chat_messages',
         filter: `match_id=eq.${matchId}`
-      }, async (payload) => {
+      }, async (payload: any) => {
         // Fetch profile data for the new message
         const { data: profile } = await supabase
           .from('profiles')

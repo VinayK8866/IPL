@@ -23,7 +23,7 @@ interface PlayerFireVFXProps {
 
 export const PlayerFireVFX = React.memo(({ isGlowing, intensity, children }: PlayerFireVFXProps) => {
   // Variations of Glow based on intensity
-  const glowVariants = {
+  const glowVariants: any = {
     initial: { opacity: 0, scale: 0.95, filter: 'blur(10px) brightness(1)' },
     active: { 
       opacity: 1, 
