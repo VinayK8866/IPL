@@ -106,8 +106,11 @@ export async function GET() {
 
             if (!team1 || !team2) continue;
 
+            const uniqueId = `${seriesId}-${event.id || Math.random().toString(36).substr(2, 9)}`;
+
             const matchObj = {
-                id: event.id || Math.random().toString(),
+                id: uniqueId,
+                originalId: event.id,
                 name: event.name || `${team1.team?.displayName} vs ${team2.team?.displayName}`,
                 series: seriesName,
                 status: mappedStatus,
@@ -134,14 +137,17 @@ export async function GET() {
             
             // RESOLVE BETS IF LIVE
             if (mappedStatus === 'LIVE') {
-                await resolveBetsForMatch(matchObj.id, seriesId);
+                await resolveBetsForMatch(matchObj.originalId || matchObj.id, seriesId);
             }
 
             allMatches.push(matchObj);
         }
     }
 
-    const sortedMatches = allMatches.sort((a, b) => {
+    // FINAL DEDUPLICATION (Safety first)
+    const uniqueMatches = Array.from(new Map(allMatches.map(m => [m.id, m])).values());
+
+    const sortedMatches = uniqueMatches.sort((a, b) => {
         const order = { 'LIVE': 0, 'UPCOMING': 1, 'RESULT': 2 };
         return order[a.status as keyof typeof order] - order[b.status as keyof typeof order];
     });

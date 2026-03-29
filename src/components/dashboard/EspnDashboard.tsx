@@ -17,7 +17,9 @@ const EspnDashboard: React.FC = () => {
             
             if (data.matches) {
                 console.log(`API RECEIVED ${data.matches.length} MATCHES`);
-                setMatches(data.matches);
+                // Deduplicate incoming matches by ID as an extra safety layer
+                const uniqueArr = Array.from(new Map(data.matches.map((m: any) => [m.id, m])).values());
+                setMatches(uniqueArr as EspnMatch[]);
             } else if (data.error) {
                 console.error('API Error:', data.error);
             }
@@ -151,8 +153,8 @@ const EspnDashboard: React.FC = () => {
                             </div>
                         ))
                     ) : filteredMatches.length > 0 ? (
-                        filteredMatches.map(match => (
-                            <div key={match.id} className="relative group/card">
+                        filteredMatches.map((match, idx) => (
+                            <div key={`${match.id}-${idx}`} className="relative group/card">
                                 <div className="absolute -inset-0.5 bg-gradient-to-r from-[#7A3FE1]/0 to-[#FF3366]/0 group-hover/card:from-[#7A3FE1]/20 group-hover/card:to-[#FF3366]/20 transition duration-500 blur-sm" />
                                 <EspnMatchCard match={match} />
                             </div>
