@@ -32,12 +32,17 @@ const EspnDashboard: React.FC = () => {
         // First try the API as it's more stable
         fetchMatchesFromApi();
 
-        // Subscribe to socket for live updates
+        // Subscribe to socket for live updates (now powered by Supabase Realtime)
         const unsubscribe = momentumSocket.subscribe((data: any) => {
-            if (data.matches) {
+            if (data.matches && data.matches.length > 0) {
                 console.log('SOCKET RECEIVED MATCHES:', data.matches[0]);
                 setMatches(data.matches);
                 setLoading(false);
+            } else {
+                // If we get a generic signal (empty matches), it means DB changed.
+                // Re-fetch from our serverless API to get the latest synced state.
+                console.log('REALTIME SIGNAL: DB changed, re-fetching...');
+                fetchMatchesFromApi();
             }
         });
 

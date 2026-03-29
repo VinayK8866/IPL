@@ -144,11 +144,15 @@ export function useCricketRealtime(matchId: string) {
       
       if (payload.matches && Array.isArray(payload.matches)) {
         matchData = payload.matches.find((m: any) => String(m.id) === String(matchId));
+        if (!matchData && payload.matches.length > 0) {
+          console.log(`[Relay] Match ${matchId} not found in broadcast. Available IDs: ${payload.matches.map((m: any) => m.id).join(', ')}`);
+        }
       } else if (String(payload.match_id) === String(matchId) || String(payload.id) === String(matchId)) {
         matchData = payload;
       }
 
       if (matchData) {
+        console.log(`[Relay] Syncing Match Data for ${matchId}: ${matchData.name || matchData.teamA?.name}`);
         // Normalization layer: Map socket format to internal MatchScore/Momentum types
         const normalizedScore: MatchScore = {
           match_id: matchData.id || matchData.match_id,
@@ -157,11 +161,14 @@ export function useCricketRealtime(matchId: string) {
           score: matchData.score || matchData.teamA?.score || matchData.teamB?.score || '0/0',
           overs: matchData.overs || matchData.teamA?.overs || matchData.teamB?.overs || '0.0',
           crr: matchData.crr || 0,
+          predicted_score: matchData.predictedScore || 0,
+          status_text: matchData.statusText || '',
           win_prob_a: matchData.win_prob_a ?? (matchData.winProbA ?? 0.5),
           win_prob_b: matchData.win_prob_b ?? (matchData.winProbB ?? 0.5),
           batters: matchData.batters || [],
           bowlers: matchData.bowlers || [],
           last_balls: matchData.last_balls || [],
+          live_commentary: matchData.live_commentary || [],
           timestamp: matchData.timestamp || payload.timestamp || new Date().toISOString()
         };
 

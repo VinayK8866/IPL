@@ -1,8 +1,12 @@
+import { EspnMatch } from "@/components/dashboard/EspnMatchCard";
+
 export interface MomentumData {
   match_id: string;
   momentum_score: number;
   timestamp: string;
+  matches?: EspnMatch[]; // Added for flexible realtime updates
 }
+
 
 export interface MatchHype {
   match_id: string;
@@ -51,7 +55,9 @@ export interface MatchScore {
   batters: Batter[];
   bowlers: Bowler[]; // Added bowlers list
   last_balls: BallData[];
+  status_text?: string;
   predicted_score?: number;
+  live_commentary?: any[];
   timestamp: string;
 }
 

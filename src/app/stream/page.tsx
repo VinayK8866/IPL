@@ -25,11 +25,14 @@ const StreamView = () => {
   const MATCH_ID = queryId || APP_CONFIG.DEFAULT_MATCH_ID;
 
   // Security: Redirect non-admins to public match view
+  // DISABLED for local streaming / OBS capture
+  /*
   useEffect(() => {
     if (!loading && !isAdmin) {
       router.push(`/match/${MATCH_ID}`);
     }
   }, [isAdmin, loading, MATCH_ID, router]);
+  */
 
   const { score, trigger } = useCricketRealtime(MATCH_ID);
   const { triggerExplosion } = useVFX();
@@ -131,7 +134,7 @@ const StreamView = () => {
          </div>
 
          <div className="pointer-events-auto">
-           <ScrollingTicker />
+           <ScrollingTicker matchId={MATCH_ID} />
          </div>
       </footer>
 

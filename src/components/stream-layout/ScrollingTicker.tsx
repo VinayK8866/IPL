@@ -4,6 +4,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Zap, TrendingUp, ShieldAlert, Cpu } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { APP_CONFIG } from '@/lib/config';
+import { useCricketRealtime } from '@/hooks/useCricketRealtime';
 
 interface TickerItem {
   id: string | number;
@@ -11,54 +13,25 @@ interface TickerItem {
   text: string;
 }
 
-export const ScrollingTicker = React.memo(() => {
-  const [liveItems, setLiveItems] = useState<TickerItem[]>([]);
-  const MATCH_ID = 'match_12345'; // Configured default
-
-  useEffect(() => {
-    const fetchLatest = async () => {
-      const { data } = await supabase
-        .from('matches')
-        .select('live_commentary')
-        .eq('id', MATCH_ID)
-        .single();
-      
-      if (data?.live_commentary) {
-        const commentary: TickerItem[] = (data.live_commentary as any[]).slice(0, 5).map((c, i) => ({
-          id: `live-${i}`,
-          type: (c.type === 'six' || c.type === 'wicket' ? 'EXPERT' : 'TACTICAL') as TickerItem['type'],
-          text: `${c.over}: ${c.ball}`.toUpperCase()
-        }));
-        setLiveItems(commentary);
-      }
-    };
-
-    fetchLatest();
-
-    const channel = supabase
-      .channel('ticker-sync')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${MATCH_ID}` }, (payload: { new: { live_commentary: any[] } }) => {
-        if (payload.new.live_commentary) {
-          const commentary: TickerItem[] = (payload.new.live_commentary).slice(0, 5).map((c, i) => ({
-            id: `live-${i}-${Date.now()}`,
-            type: (c.type === 'six' || c.type === 'wicket' ? 'EXPERT' : 'TACTICAL') as TickerItem['type'],
-            text: `${c.over}: ${c.ball}`.toUpperCase()
-          }));
-          setLiveItems(commentary);
-        }
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [MATCH_ID]);
-
+export const ScrollingTicker = React.memo(({ matchId }: { matchId: string }) => {
+  const { score } = useCricketRealtime(matchId || APP_CONFIG.DEFAULT_MATCH_ID);
+  
   const scrollingItems = useMemo(() => {
-    const base = liveItems.length > 0 ? liveItems : [
-      { id: 1, type: 'UPDATE', text: 'INITIALIZING PULSE DATA ENGINE... 20ms LOCAL SYNC ACTIVE' },
-      { id: 2, type: 'TACTICAL', text: 'GEMINI AI: ANALYZING MOMENTUM VOLATILITY FOR NEXT OVER' }
-    ] as TickerItem[];
-    return [...base, ...base, ...base, ...base];
-  }, [liveItems]);
+    if (score) {
+      return [
+        { id: 's1', type: 'UPDATE' as const, text: `PULSE DATA ENGINE: ${score.status?.toUpperCase()} | CRR: ${score.crr || '0.0'} | SYNC ACTIVE` },
+        { id: 's2', type: 'TACTICAL' as const, text: `GEMINI AI: TARGET PREDICTION ~${score.predicted_score || '0'} | MOMENTUM: ${score.win_prob_a > 0.5 ? 'STRONG' : 'STABLE'}` },
+        { id: 's3', type: 'UPDATE' as const, text: `${score.team_a} vs ${score.team_b} | ${score.status_text || 'LIVE BROADCAST'}` },
+        { id: 's4', type: 'TACTICAL' as const, text: `CYBER FEED: HIGH-SENTIMENT PEAK DETECTED | ANALYZING VOLATILITY...` }
+      ];
+    }
+    return [
+      { id: 1, type: 'UPDATE' as const, text: 'INITIALIZING PULSE DATA ENGINE... 20ms LOCAL SYNC ACTIVE' },
+      { id: 2, type: 'TACTICAL' as const, text: 'GEMINI AI: ANALYZING MOMENTUM VOLATILITY FOR NEXT OVER' }
+    ];
+  }, [score]);
+
+  const items = useMemo(() => [...scrollingItems, ...scrollingItems, ...scrollingItems], [scrollingItems]);
 
   return (
     <div className="w-full bg-[#05070A]/80 border-t-2 border-pink-600/50 backdrop-blur-xl h-16 flex items-center overflow-hidden relative">
@@ -78,10 +51,10 @@ export const ScrollingTicker = React.memo(() => {
           {scrollingItems.map((item, idx) => (
             <div key={`${item.id}-${idx}`} className="flex items-center gap-4">
               <div className="flex items-center gap-2">
-                {item.type === 'EXPERT' && <ShieldAlert size={14} className="text-[#FF3366] animate-pulse" />}
-                {item.type === 'TACTICAL' && <Zap size={14} className="text-gold-500" />}
+                {item.type === 'UPDATE' && <Cpu size={14} className="text-blue-400" />}
+                {item.type === 'TACTICAL' && <Zap size={14} className="text-[#FF3366] animate-pulse" />}
                 <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${
-                  item.type === 'EXPERT' ? 'text-[#FF3366]' : 'text-blue-400'
+                  item.type === 'TACTICAL' ? 'text-[#FF3366]' : 'text-blue-400'
                 }`}>
                   {item.type}:
                 </span>
