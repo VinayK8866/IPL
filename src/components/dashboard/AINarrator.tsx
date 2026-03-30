@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Terminal, Zap, ShieldAlert } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
 
 import { useCricketRealtime } from '@/hooks/useCricketRealtime'
 
@@ -18,41 +17,47 @@ export default function AINarrator({ matchId }: { matchId: string }) {
   const [commentary, setCommentary] = useState<Commentary[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Fetch commentary from the serverless API (works on Vercel)
   useEffect(() => {
-    // 1. Initial Fetch
-    const fetchMatch = async () => {
-      const { data } = await supabase
-        .from('matches')
-        .select('live_commentary')
-        .eq('id', matchId)
-        .single()
+    let isMounted = true;
 
-      if (data?.live_commentary) {
-        setCommentary(data.live_commentary as Commentary[])
-      }
-      setLoading(false)
-    }
-
-    fetchMatch()
-
-    // 2. Realtime Subscription
-    const channel = supabase
-      .channel(`match-${matchId}-commentary`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
-        (payload: { new: { live_commentary: Commentary[] } }) => {
-          if (payload.new.live_commentary) {
-            setCommentary(payload.new.live_commentary)
-          }
+    const fetchCommentary = async () => {
+      try {
+        const res = await fetch(`/api/match/${matchId}`);
+        if (!res.ok) {
+          setLoading(false);
+          return;
         }
-      )
-      .subscribe()
+        const data = await res.json();
+        if (!isMounted) return;
+
+        if (data.live_commentary && data.live_commentary.length > 0) {
+          setCommentary(data.live_commentary as Commentary[]);
+        }
+      } catch (err) {
+        console.warn('[AINarrator] API fetch failed:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    fetchCommentary();
+
+    // Poll every 10s for updated commentary
+    const interval = setInterval(fetchCommentary, 10000);
 
     return () => {
-      supabase.removeChannel(channel)
-    }
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, [matchId])
+
+  // Also sync commentary from the realtime hook when available
+  useEffect(() => {
+    if (score?.live_commentary && score.live_commentary.length > 0) {
+      setCommentary(score.live_commentary as Commentary[]);
+    }
+  }, [score?.live_commentary])
 
   if (loading) return <div className="animate-pulse bg-[#05070A] h-full w-full border border-white/5" />
 
@@ -105,8 +110,8 @@ export default function AINarrator({ matchId }: { matchId: string }) {
         )}
 
         <AnimatePresence mode="popLayout">
-          {(score?.live_commentary?.length ? score.live_commentary : commentary).length > 0 ? (
-            (score?.live_commentary?.length ? score.live_commentary : commentary).map((item: Commentary, idx: number) => (
+          {commentary.length > 0 ? (
+            commentary.map((item: Commentary, idx: number) => (
               <motion.div
                 key={`${item.over}-${idx}`}
                 initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }}

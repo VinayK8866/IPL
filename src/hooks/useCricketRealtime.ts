@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLatencyRef } from '@/providers/LatencyProvider';
 import { momentumSocket } from '../lib/data-engine/socket-client';
-import { supabase } from '../lib/supabaseClient';
 import { MomentumData, MatchHype, MatchScore } from '../lib/data-engine/types';
 
 /**
- * PROJECT CRICKET PULSE - REALTIME HOOK
+ * PROJECT CRICKET PULSE - REALTIME HOOK (Serverless-Compatible)
  * 
- * Manages WebSocket/Realtime subscriptions with broadcast latency synchronization.
- * Includes a deduplication layer and high-performance queuing.
+ * Two-tier data strategy:
+ * 1. Primary: Poll /api/match/[id] serverless endpoint every 5s (works on Vercel)
+ * 2. Secondary: Supabase Realtime via momentumSocket (for instant updates when worker is running)
+ * 
+ * Includes deduplication, latency synchronization, and event detection.
  */
 
 // Local type for trigger states
@@ -37,6 +39,30 @@ export function useCricketRealtime(matchId: string) {
   const lastScoreTimestamp = useRef<string | null>(null);
   const prevScoreData = useRef<MatchScore | null>(null);
 
+  // Track if API polling has provided data
+  const hasApiData = useRef(false);
+
+  // Shared function to queue a normalized score
+  const queueScoreUpdate = useCallback((normalizedScore: MatchScore) => {
+    const normalizedMomentum: MomentumData = {
+      match_id: normalizedScore.match_id,
+      momentum_score: (normalizedScore.win_prob_a - 0.5) * 20,
+      timestamp: normalizedScore.timestamp
+    };
+
+    momentumQueue.current.push({
+      data: normalizedMomentum,
+      at_timestamp: Date.now()
+    });
+
+    scoreQueue.current.push({
+      data: normalizedScore,
+      at_timestamp: Date.now()
+    });
+
+    setIsConnected(true);
+  }, []);
+
   // Processing loop to drain queues
   useEffect(() => {
     let animationFrameId: number;
@@ -50,7 +76,6 @@ export function useCricketRealtime(matchId: string) {
         (now - momentumQueue.current[0].at_timestamp) >= delayMs) {
         const next = momentumQueue.current.shift();
         if (next) {
-          // Deduplication check
           const momentumId = `${next.data.match_id}-${next.data.timestamp}`;
           if (momentumId !== lastMomentumId.current) {
             setMomentum(next.data);
@@ -64,17 +89,14 @@ export function useCricketRealtime(matchId: string) {
         (now - hypeQueue.current[0].at_timestamp) >= delayMs) {
         const next = hypeQueue.current.shift();
         if (next) {
-          // Detect Significant Changes for VFX
           setHype(prev => {
             if (!prev) return next.data;
-
-            // Example Trigger logic: If total hype jumps significantly, trigger effect
             const prevTotal = prev.team_a_clicks + prev.team_b_clicks;
             const currentTotal = next.data.team_a_clicks + next.data.team_b_clicks;
 
             if (currentTotal - prevTotal > 100) {
               setTrigger('MILESTONE');
-              setTimeout(() => setTrigger(null), 2000); // Reset after 2s
+              setTimeout(() => setTrigger(null), 2000);
             }
 
             if (JSON.stringify(prev) === JSON.stringify(next.data)) return prev;
@@ -94,7 +116,7 @@ export function useCricketRealtime(matchId: string) {
               const prev = prevScoreData.current;
               const current = next.data;
 
-              // 1. Detect Wickets (score format usually X/Y)
+              // 1. Detect Wickets
               const prevWickets = parseInt(prev.score.split('/')[1] || '0');
               const currentWickets = parseInt(current.score.split('/')[1] || '0');
               if (currentWickets > prevWickets) {
@@ -102,10 +124,9 @@ export function useCricketRealtime(matchId: string) {
                 setTimeout(() => setTrigger(null), 3000);
               }
 
-              // 2. Detect Boundaries (comparing batter boundary counts)
-              // This is a proxy since we don't have ball-by-ball delta here
+              // 2. Detect Boundaries
               let boundaryHit: SyncEventTrigger = null;
-              current.batters.forEach((b, idx) => {
+              current.batters.forEach((b) => {
                 const prevB = prev.batters.find(pb => pb.name === b.name);
                 if (prevB) {
                   if (b.sixes > prevB.sixes) boundaryHit = 'BOUNDARY_SIX';
@@ -133,27 +154,77 @@ export function useCricketRealtime(matchId: string) {
     return () => cancelAnimationFrame(animationFrameId);
   }, []);
 
-  // Set up Subscriptions
+  // ===== TIER 1: API POLLING (Serverless-compatible, always works on Vercel) =====
   useEffect(() => {
     if (!matchId) return;
 
-    // Unified subscription to the relay
+    let isMounted = true;
+    let pollTimer: ReturnType<typeof setTimeout>;
+
+    const fetchFromApi = async () => {
+      try {
+        const res = await fetch(`/api/match/${matchId}`);
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (!isMounted || data.error) return;
+
+        hasApiData.current = true;
+
+        const normalizedScore: MatchScore = {
+          match_id: data.match_id || matchId,
+          team_a: data.team_a || 'TBA',
+          team_b: data.team_b || 'TBA',
+          score: data.score || '0/0',
+          overs: data.overs || '0.0',
+          crr: data.crr || 0,
+          predicted_score: data.predicted_score || 0,
+          status: data.status,
+          status_text: data.status_text || '',
+          win_prob_a: data.win_prob_a ?? 0.5,
+          win_prob_b: data.win_prob_b ?? 0.5,
+          batters: data.batters || [],
+          bowlers: data.bowlers || [],
+          last_balls: data.last_balls || [],
+          live_commentary: data.live_commentary || [],
+          timestamp: data.timestamp || new Date().toISOString()
+        };
+
+        queueScoreUpdate(normalizedScore);
+      } catch (err) {
+        console.warn(`[API Poll] Failed to fetch match ${matchId}:`, err);
+      }
+    };
+
+    // Initial fetch immediately
+    fetchFromApi();
+
+    // Poll every 5 seconds for live data
+    const startPolling = () => {
+      pollTimer = setInterval(fetchFromApi, 5000);
+    };
+    startPolling();
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
+    };
+  }, [matchId, queueScoreUpdate]);
+
+  // ===== TIER 2: Supabase Realtime (momentumSocket) =====
+  useEffect(() => {
+    if (!matchId) return;
+
     const unsubscribe = momentumSocket.subscribe((payload: any) => {
-      // The relay sends either a single update or an array of matches
       let matchData = null;
-      
+
       if (payload.matches && Array.isArray(payload.matches)) {
         matchData = payload.matches.find((m: any) => String(m.id) === String(matchId));
-        if (!matchData && payload.matches.length > 0) {
-          console.log(`[Relay] Match ${matchId} not found in broadcast. Available IDs: ${payload.matches.map((m: any) => m.id).join(', ')}`);
-        }
       } else if (String(payload.match_id) === String(matchId) || String(payload.id) === String(matchId)) {
         matchData = payload;
       }
 
       if (matchData) {
-        console.log(`[Relay] Syncing Match Data for ${matchId}: ${matchData.name || matchData.teamA?.name}`);
-        // Normalization layer: Map socket format to internal MatchScore/Momentum types
         const normalizedScore: MatchScore = {
           match_id: matchData.id || matchData.match_id,
           team_a: matchData.team_a || matchData.teamA?.name || 'TBA',
@@ -172,33 +243,16 @@ export function useCricketRealtime(matchId: string) {
           timestamp: matchData.timestamp || payload.timestamp || new Date().toISOString()
         };
 
-        const normalizedMomentum: MomentumData = {
-          match_id: matchData.id || matchData.match_id,
-          momentum_score: matchData.momentum_score || (normalizedScore.win_prob_a - 0.5) * 20,
-          timestamp: normalizedScore.timestamp
-        };
-
-        // Queue for synchronization
-        momentumQueue.current.push({
-          data: normalizedMomentum,
-          at_timestamp: Date.now()
-        });
-
-        scoreQueue.current.push({
-          data: normalizedScore,
-          at_timestamp: Date.now()
-        });
-
-        setIsConnected(true);
+        queueScoreUpdate(normalizedScore);
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [matchId]);
+  }, [matchId, queueScoreUpdate]);
 
-  // Heavy memoization for performance to prevent React-Three-Fiber re-renders
+  // Heavy memoization for performance
   const memoizedMomentum = useMemo(() => momentum, [momentum]);
   const memoizedHype = useMemo(() => hype, [hype]);
   const memoizedScore = useMemo(() => score, [score]);
@@ -209,6 +263,6 @@ export function useCricketRealtime(matchId: string) {
     hype: memoizedHype,
     score: memoizedScore,
     trigger: memoizedTrigger,
-    isConnected: isConnected && momentumSocket.isConnected()
+    isConnected: isConnected || hasApiData.current
   };
 }
