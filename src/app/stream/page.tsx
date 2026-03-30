@@ -20,19 +20,37 @@ const StreamView = () => {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { isAdmin, loading } = useAuth();
+  const [resolvedMatchId, setResolvedMatchId] = React.useState<string | null>(null);
   
   const queryId = searchParams.get('id');
-  const MATCH_ID = queryId || APP_CONFIG.DEFAULT_MATCH_ID;
 
-  // Security: Redirect non-admins to public match view
-  // DISABLED for local streaming / OBS capture
-  /*
+  // Logic to resolve the best match ID to display
   useEffect(() => {
-    if (!loading && !isAdmin) {
-      router.push(`/match/${MATCH_ID}`);
+    if (queryId) {
+      setResolvedMatchId(queryId);
+      return;
     }
-  }, [isAdmin, loading, MATCH_ID, router]);
-  */
+
+    const findLiveMatch = async () => {
+      try {
+        const res = await fetch('/api/matches');
+        const data = await res.json();
+        if (data.matches && data.matches.length > 0) {
+          // Priority: LIVE matches > first available match
+          const liveMatch = data.matches.find((m: any) => m.status === 'LIVE');
+          setResolvedMatchId(liveMatch ? liveMatch.id : data.matches[0].id);
+        } else {
+          setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
+        }
+      } catch {
+        setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
+      }
+    };
+
+    findLiveMatch();
+  }, [queryId]);
+
+  const MATCH_ID = resolvedMatchId || APP_CONFIG.DEFAULT_MATCH_ID;
 
   const { score, trigger } = useCricketRealtime(MATCH_ID);
   const { triggerExplosion } = useVFX();

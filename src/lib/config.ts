@@ -4,7 +4,7 @@
 
 export const APP_CONFIG = {
   // Default Match ID for the dashboard
-  DEFAULT_MATCH_ID: process.env.NEXT_PUBLIC_DEFAULT_MATCH_ID || "1527674", // RCB vs SRH 2026 Opener
+  DEFAULT_MATCH_ID: process.env.NEXT_PUBLIC_DEFAULT_MATCH_ID || "1527930-1527949", // PM Cup Catch-all
   
   // API Endpoints
   RELAY_SERVER_URL: process.env.NEXT_PUBLIC_RELAY_SERVER_URL || "http://localhost:3001",
