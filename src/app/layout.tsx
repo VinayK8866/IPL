@@ -9,8 +9,13 @@ import { EventExplosion } from "@/components/dashboard/vfx/EventExplosion";
 const inter = Inter({ subsets: ["latin"], weight: ['400', '700', '900'] });
 
 export const metadata: Metadata = {
-  title: "CRICKET PULSE | Real-Time visualization",
-  description: "High-adrenaline, real-time cricket visualization engine.",
+  title: "CRICKET PULSE | Real-Time Visual Data Engine",
+  description: "High-adrenaline, real-time cricket visualization and telemetry engine.",
+  icons: {
+    icon: "/favicon.png",
+    shortcut: "/favicon.png",
+    apple: "/favicon.png",
+  }
 };
 
 export const viewport = {
