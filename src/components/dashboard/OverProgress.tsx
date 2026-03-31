@@ -7,19 +7,19 @@ import { useCricketRealtime } from '@/hooks/useCricketRealtime';
 export const OverProgress = ({ matchId }: { matchId: string }) => {
     const { score } = useCricketRealtime(matchId);
     
-    // Extract last 6 balls from commentary or last_balls
-    // In our case, we'll parse the live_commentary to show the actual results
+    // Use structured 'type' property for 100% accuracy
     const balls = score?.live_commentary?.slice(0, 6).reverse().map(p => {
-        const text = p.ball.toLowerCase();
         let result = '.';
-        let color = '#374151'; // Neutral gray-700
+        let color = '#374151'; // gray-700 (Dot/Default)
         
-        if (text.includes('four') || text.includes('4 runs')) { result = '4'; color = '#7A3FE1'; }
-        else if (text.includes('six') || text.includes('6 runs')) { result = '6'; color = '#FFD700'; }
-        else if (text.includes('out') || text.includes('wicket')) { result = 'W'; color = '#FF3366'; }
-        else if (text.includes('1 run')) { result = '1'; color = '#1F2937'; }
-        else if (text.includes('2 runs')) { result = '2'; color = '#1F2937'; }
-        else if (text.includes('3 runs')) { result = '3'; color = '#1F2937'; }
+        const type = p.type?.toLowerCase();
+        
+        if (type === 'four') { result = '4'; color = '#7A3FE1'; }
+        else if (type === 'six') { result = '6'; color = '#FFD700'; }
+        else if (type === 'wicket') { result = 'W'; color = '#FF3366'; }
+        else if (p.ball.toLowerCase().includes('1 run')) { result = '1'; color = '#4B5563'; }
+        else if (p.ball.toLowerCase().includes('2 runs')) { result = '2'; color = '#4B5563'; }
+        else if (p.ball.toLowerCase().includes('3 runs')) { result = '3'; color = '#4B5563'; }
         
         return { result, color };
     }) || [];
@@ -48,9 +48,16 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                         {ball.result}
                     </motion.div>
                 )) : (
-                    Array(6).fill(0).map((_, i) => (
-                        <div key={i} className="w-10 h-10 border border-white/5 bg-white/2" />
-                    ))
+                    <div className="w-full h-10 flex items-center px-4 bg-white/5 border border-dashed border-white/10 group overflow-hidden">
+                        <motion.span 
+                            animate={{ opacity: [0.3, 0.6, 0.3] }}
+                            transition={{ duration: 2, repeat: Infinity }}
+                            className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2"
+                        >
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-700 animate-pulse" />
+                            Awaiting Live Feed...
+                        </motion.span>
+                    </div>
                 )}
             </div>
         </div>

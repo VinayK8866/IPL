@@ -78,16 +78,27 @@ async function upsertMatchToSupabase(match) {
     
     try {
         // Map scraper format to Supabase schema
+        const oversStr = match.teamA.isBatting ? match.teamA.overs : (match.teamB.overs || '0.0');
+        const oversSplit = oversStr.split('.');
+        const current_ball_index = (parseInt(oversSplit[0] || '0') * 6) + (parseInt(oversSplit[1] || '0'));
+
         const { error } = await supabase
             .from('matches')
             .upsert({
                 id: match.id,
                 team_a: match.teamA.name,
                 team_b: match.teamB.name,
+                score: match.teamA.isBatting ? match.teamA.score : match.teamB.score,
+                overs: oversStr,
+                crr: match.crr || 0,
                 status: match.status.toLowerCase(),
                 win_prob_a: match.winProbA || 0.5,
                 win_prob_b: match.winProbB || 0.5,
-                live_commentary: match.live_commentary || []
+                batters: match.batters || [],
+                bowlers: match.bowlers || [],
+                live_commentary: match.live_commentary || [],
+                last_balls: match.last_balls || [],
+                current_ball_index: current_ball_index
             });
             
         if (error) console.error(`[Supabase] Match Update failed:`, error.message);
@@ -184,12 +195,14 @@ async function scrapeScores() {
 
             const predictedScore = Math.round(crr * 20);
 
-            // --- NEW: Fetch Commentary & Situation for active match ---
+            // --- NEW: Fetch Commentary & Situation for all active matches ---
             let live_commentary = [];
             let batters = [];
             let bowlers = [];
 
-            if (matchId === SCRAPE_MATCH_ID) {
+            // Only fetch deeper data for LIVE matches to save credits/rate-limits
+            const isLive = mappedStatus === 'LIVE';
+            if (isLive) {
                 try {
                     const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${matchId}&t=${Date.now()}`;
                     const sumRes = await axios.get(sumUrl);
@@ -240,15 +253,19 @@ async function scrapeScores() {
                 }
             }
 
-            const matchObj = {
-                id: matchId,
-                name: event.name || `${team1.team?.displayName} vs ${team2.team?.displayName}`,
-                series: seriesName,
-                status: mappedStatus,
-                statusText: summary || detail || status.type?.description || '',
-                live_commentary: live_commentary,
-                batters: batters,
-                bowlers: bowlers,
+                const matchObj = {
+                    id: matchId,
+                    name: event.name || `${team1.team?.displayName} vs ${team2.team?.displayName}`,
+                    series: seriesName,
+                    status: mappedStatus,
+                    statusText: summary || detail || status.type?.description || '',
+                    live_commentary: live_commentary,
+                    last_balls: live_commentary.map(p => ({
+                        runs: p.type === 'four' ? 4 : (p.type === 'six' ? 6 : 0),
+                        outcome: p.type
+                    })),
+                    batters: batters,
+                    bowlers: bowlers,
                 teamA: {
                     name: team1.team?.displayName || team1.team?.shortDisplayName || 'TBA',
                     score: team1.score || '',
