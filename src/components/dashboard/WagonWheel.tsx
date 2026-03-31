@@ -25,14 +25,14 @@ export const WagonWheel = React.memo(({ matchId }: WagonWheelProps) => {
   const hits = useMemo(() => {
     if (!score?.last_balls) return [];
     return score.last_balls.map((ball, i) => {
-      // Convert normalized x/y to radial coordinates for the SVG
-      const angle = (ball.x * 360) - 180;
-      const distance = (ball.y * 80) + 10; // 10% to 90% distance from center
-      const isBoundary = ball.y > 0.8;
+      // JUGAAD: Use the parsed angle from commentary (stored in z)
+      const angle = (ball.z as number) || 0;
+      const distance = (ball.y * 50) + 40; // Scale distance for better visual spread
+      const isBoundary = ball.y > 0.7;
       
       return {
         id: ball.timestamp + i,
-        angle,
+        angle: angle - 90, // Adjust for SVG coordinates
         distance,
         color: ball.is_wicket ? '#FF3366' : (isBoundary ? '#FFD700' : '#7A3FE1'),
         size: isBoundary ? 6 : 4

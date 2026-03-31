@@ -143,20 +143,74 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 4000 });
         const summaryData = summaryRes.data;
 
-        // Commentary
+        // 1. Commentary & NLP-derived coordinates (JUGAAD)
         if (summaryData.plays) {
             const plays = Array.isArray(summaryData.plays) ? summaryData.plays : Object.values(summaryData.plays);
-            result.live_commentary = plays
-                .sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0))
-                .slice(0, 15)
-                .map((p: any) => ({
-                    over: String(p.over?.number || p.period || '0'),
-                    ball: `${p.over?.ball || ''}: ${p.title || p.text || ''}`.trim(),
-                    type: p.dismissal?.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
-                }));
+            const sortedPlays = plays.sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0));
+            
+            result.live_commentary = sortedPlays.slice(0, 15).map((p: any) => ({
+                over: String(p.over?.number || p.period || '0'),
+                ball: `${p.over?.ball || ''}: ${p.title || p.text || ''}`.trim(),
+                type: p.dismissal?.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
+            }));
+
+            result.last_balls = sortedPlays.slice(0, 6).map((p: any, idx: number) => {
+                const text = (p.text || '').toLowerCase();
+                let x = 0.5, y = 0.6, angle = 0;
+                
+                if (text.includes('outside off') || text.includes('width')) x = 0.8;
+                else if (text.includes('leg stump') || text.includes('pads')) x = 0.2;
+                
+                if (text.includes('short') || text.includes('bounced')) y = 0.3;
+                else if (text.includes('full') || text.includes('half volley')) y = 0.8;
+                else if (text.includes('yorker')) y = 1.0;
+                
+                if (text.includes('cover') || text.includes('point')) angle = 135;
+                else if (text.includes('mid-off') || text.includes('long-off')) angle = 180;
+                else if (text.includes('mid-on') || text.includes('long-on')) angle = 0;
+                else if (text.includes('mid-wicket') || text.includes('square leg')) angle = 45;
+                
+                return {
+                    x, y, z: angle,
+                    type: p.scoreValue >= 4 ? 'pace' : 'spin',
+                    is_wicket: !!p.dismissal?.dismissal,
+                    timestamp: new Date(Date.now() - idx * 60000).toISOString()
+                };
+            });
         }
 
-        // Win Probability
+        // 2. Situational Players (Batters/Bowlers)
+        const situ = summaryData.situation;
+        if (situ) {
+            const b1 = situ.batter1 ? { 
+                name: situ.batter1.athlete?.displayName || 'Batter 1', 
+                runs: situ.batter1.runs || 0, 
+                balls: situ.batter1.balls || 0, 
+                fours: 0, sixes: 0, 
+                strikeRate: (situ.batter1.runs / (situ.batter1.balls || 1)) * 100,
+                isBatting: true 
+            } : null;
+            const b2 = situ.batter2 ? { 
+                name: situ.batter2.athlete?.displayName || 'Batter 2', 
+                runs: situ.batter2.runs || 0, 
+                balls: situ.batter2.balls || 0, 
+                fours: 0, sixes: 0, 
+                strikeRate: (situ.batter2.runs / (situ.batter2.balls || 1)) * 100,
+                isBatting: false 
+            } : null;
+            result.batters = [b1, b2].filter(Boolean);
+            
+            if (situ.bowler1) {
+                result.bowlers = [{
+                    name: situ.bowler1.athlete?.displayName || 'Bowler',
+                    overs: situ.bowler1.overs || 0,
+                    runs: situ.bowler1.conceded || 0,
+                    wickets: situ.bowler1.wickets || 0
+                }];
+            }
+        }
+
+        // 3. Win Probability
         if (summaryData.predictor?.homeTeam) {
             result.win_prob_a = (summaryData.predictor.homeTeam.gameProjection || 50) / 100;
             result.win_prob_b = 1 - result.win_prob_a;

@@ -131,6 +131,27 @@ const PredictionTicker = React.memo(({ score }: { score: MatchScore }) => {
 });
 PredictionTicker.displayName = 'PredictionTicker';
 
+// Sub-component: Active Bowler Card
+const ActiveBowler = React.memo(({ bowler }: { bowler: any }) => (
+  <div className="bg-[#05070A]/80 border-t border-white/5 p-3 flex justify-between items-center group">
+    <div className="flex flex-col">
+       <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Active Bowler</span>
+       <span className="text-xs font-black italic text-[#FF3366] uppercase">{bowler.name}</span>
+    </div>
+    <div className="flex gap-6">
+       <div className="flex flex-col items-end">
+          <span className="text-[8px] text-gray-600 uppercase font-black">Overs</span>
+          <span className="text-xs font-bold text-white">{bowler.overs}</span>
+       </div>
+       <div className="flex flex-col items-end">
+          <span className="text-[8px] text-gray-600 uppercase font-black">Figures</span>
+          <span className="text-xs font-bold text-[#FFD700]">{bowler.wickets}-{bowler.runs}</span>
+       </div>
+    </div>
+  </div>
+));
+ActiveBowler.displayName = 'ActiveBowler';
+
 // Main Scoreboard Component (Memoized)
 export const Scoreboard = React.memo(({ matchId }: { matchId: string }) => {
   const { score } = useCricketRealtime(matchId);
@@ -162,6 +183,10 @@ export const Scoreboard = React.memo(({ matchId }: { matchId: string }) => {
             <ActiveBatter key={`${batter.name}-${idx}`} batter={batter} matchId={matchId} />
           ))}
         </div>
+      )}
+
+      {currentScore.bowlers.length > 0 && (
+        <ActiveBowler bowler={currentScore.bowlers[0]} />
       )}
 
       <PredictionTicker score={currentScore} />

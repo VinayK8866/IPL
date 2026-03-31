@@ -42,14 +42,34 @@ export function useCricketRealtime(matchId: string) {
   // Track if API polling has provided data
   const hasApiData = useRef(false);
 
-  // Shared function to queue a normalized score
-  const queueScoreUpdate = useCallback((normalizedScore: MatchScore) => {
+  // Shared function to process incoming data (from Poll OR Socket)
+  const processIncomingData = useCallback((matchData: any) => {
+    // Normalization layer: Map various formats to internal MatchScore/Momentum types
+    const normalizedScore: MatchScore = {
+      match_id: matchData.id || matchData.match_id,
+      team_a: matchData.team_a || matchData.teamA?.name || 'TBA',
+      team_b: matchData.team_b || matchData.teamB?.name || 'TBA',
+      score: matchData.score || matchData.teamA?.score || matchData.teamB?.score || '0/0',
+      overs: matchData.overs || matchData.teamA?.overs || matchData.teamB?.overs || '0.0',
+      crr: matchData.crr || 0,
+      predicted_score: matchData.predicted_score || matchData.predictedScore || 0,
+      status_text: matchData.status_text || matchData.statusText || '',
+      win_prob_a: matchData.win_prob_a ?? (matchData.winProbA ?? 0.5),
+      win_prob_b: matchData.win_prob_b ?? (matchData.winProbB ?? 0.5),
+      batters: matchData.batters || [],
+      bowlers: matchData.bowlers || [],
+      last_balls: matchData.last_balls || [],
+      live_commentary: matchData.live_commentary || [],
+      timestamp: matchData.timestamp || new Date().toISOString()
+    };
+
     const normalizedMomentum: MomentumData = {
       match_id: normalizedScore.match_id,
       momentum_score: (normalizedScore.win_prob_a - 0.5) * 20,
       timestamp: normalizedScore.timestamp
     };
 
+    // Queue for synchronization with broadcast lag
     momentumQueue.current.push({
       data: normalizedMomentum,
       at_timestamp: Date.now()
@@ -60,6 +80,7 @@ export function useCricketRealtime(matchId: string) {
       at_timestamp: Date.now()
     });
 
+    hasApiData.current = true;
     setIsConnected(true);
   }, []);
 
@@ -152,9 +173,9 @@ export function useCricketRealtime(matchId: string) {
 
     animationFrameId = requestAnimationFrame(processQueues);
     return () => cancelAnimationFrame(animationFrameId);
-  }, []);
+  }, [getOffset]);
 
-  // ===== TIER 1: API POLLING (Serverless-compatible, always works on Vercel) =====
+  // ===== TIER 1: API POLLING (Serverless-compatible, works on Vercel) =====
   useEffect(() => {
     if (!matchId) return;
 
@@ -169,28 +190,7 @@ export function useCricketRealtime(matchId: string) {
         const data = await res.json();
         if (!isMounted || data.error) return;
 
-        hasApiData.current = true;
-
-        const normalizedScore: MatchScore = {
-          match_id: data.match_id || matchId,
-          team_a: data.team_a || 'TBA',
-          team_b: data.team_b || 'TBA',
-          score: data.score || '0/0',
-          overs: data.overs || '0.0',
-          crr: data.crr || 0,
-          predicted_score: data.predicted_score || 0,
-          status: data.status,
-          status_text: data.status_text || '',
-          win_prob_a: data.win_prob_a ?? 0.5,
-          win_prob_b: data.win_prob_b ?? 0.5,
-          batters: data.batters || [],
-          bowlers: data.bowlers || [],
-          last_balls: data.last_balls || [],
-          live_commentary: data.live_commentary || [],
-          timestamp: data.timestamp || new Date().toISOString()
-        };
-
-        queueScoreUpdate(normalizedScore);
+        processIncomingData(data);
       } catch (err) {
         console.warn(`[API Poll] Failed to fetch match ${matchId}:`, err);
       }
@@ -199,58 +199,42 @@ export function useCricketRealtime(matchId: string) {
     // Initial fetch immediately
     fetchFromApi();
 
-    // Poll every 5 seconds for live data
-    const startPolling = () => {
-      pollTimer = setInterval(fetchFromApi, 5000);
-    };
-    startPolling();
+    // Poll every 10 seconds for live data (Save Vercel usage)
+    pollTimer = setInterval(fetchFromApi, 10000);
 
     return () => {
       isMounted = false;
       clearInterval(pollTimer);
     };
-  }, [matchId, queueScoreUpdate]);
+  }, [matchId, processIncomingData]);
 
-  // ===== TIER 2: Supabase Realtime (momentumSocket) =====
+  // ===== TIER 2: Supabase Realtime (Instant updates) =====
   useEffect(() => {
     if (!matchId) return;
 
+    // Unified subscription to the relay
     const unsubscribe = momentumSocket.subscribe((payload: any) => {
       let matchData = null;
 
       if (payload.matches && Array.isArray(payload.matches)) {
+        if (payload.matches.length === 0) {
+            // Signal to re-fetch if broadcast is cleared
+            return;
+        }
         matchData = payload.matches.find((m: any) => String(m.id) === String(matchId));
       } else if (String(payload.match_id) === String(matchId) || String(payload.id) === String(matchId)) {
         matchData = payload;
       }
 
       if (matchData) {
-        const normalizedScore: MatchScore = {
-          match_id: matchData.id || matchData.match_id,
-          team_a: matchData.team_a || matchData.teamA?.name || 'TBA',
-          team_b: matchData.team_b || matchData.teamB?.name || 'TBA',
-          score: matchData.score || matchData.teamA?.score || matchData.teamB?.score || '0/0',
-          overs: matchData.overs || matchData.teamA?.overs || matchData.teamB?.overs || '0.0',
-          crr: matchData.crr || 0,
-          predicted_score: matchData.predictedScore || 0,
-          status_text: matchData.statusText || '',
-          win_prob_a: matchData.win_prob_a ?? (matchData.winProbA ?? 0.5),
-          win_prob_b: matchData.win_prob_b ?? (matchData.winProbB ?? 0.5),
-          batters: matchData.batters || [],
-          bowlers: matchData.bowlers || [],
-          last_balls: matchData.last_balls || [],
-          live_commentary: matchData.live_commentary || [],
-          timestamp: matchData.timestamp || payload.timestamp || new Date().toISOString()
-        };
-
-        queueScoreUpdate(normalizedScore);
+        processIncomingData(matchData);
       }
     });
 
     return () => {
       unsubscribe();
     };
-  }, [matchId, queueScoreUpdate]);
+  }, [matchId, processIncomingData]);
 
   // Heavy memoization for performance
   const memoizedMomentum = useMemo(() => momentum, [momentum]);

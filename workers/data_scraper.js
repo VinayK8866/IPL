@@ -87,12 +87,7 @@ async function upsertMatchToSupabase(match) {
                 status: match.status.toLowerCase(),
                 win_prob_a: match.winProbA || 0.5,
                 win_prob_b: match.winProbB || 0.5,
-                // Commented out until column is added to Supabase matches table
-                /*
-                live_commentary: [
-                    { over: match.teamA.overs || match.teamB.overs || '0.0', ball: match.statusText, type: 'update' }
-                ]
-                */
+                live_commentary: match.live_commentary || []
             });
             
         if (error) console.error(`[Supabase] Match Update failed:`, error.message);
@@ -189,20 +184,59 @@ async function scrapeScores() {
 
             const predictedScore = Math.round(crr * 20);
 
-            // --- NEW: Fetch Commentary for active match ---
+            // --- NEW: Fetch Commentary & Situation for active match ---
             let live_commentary = [];
+            let batters = [];
+            let bowlers = [];
+
             if (matchId === SCRAPE_MATCH_ID) {
                 try {
                     const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${matchId}&t=${Date.now()}`;
                     const sumRes = await axios.get(sumUrl);
-                    const plays = sumRes.data.plays || [];
+                    const summaryData = sumRes.data;
+
+                    // 1. Commentary
+                    const plays = summaryData.plays || [];
                     live_commentary = plays.slice(0, 10).map(p => ({
                         over: p.over?.number || '0',
                         ball: p.over?.ball + ': ' + (p.title || p.text || ''),
                         type: p.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
                     }));
+
+                    // 2. Batters & Bowlers (SITUATION DATA)
+                    const situ = summaryData.situation;
+                    if (situ) {
+                        if (situ.batter1) {
+                            batters.push({
+                                name: situ.batter1.athlete?.displayName || 'Batter 1',
+                                runs: situ.batter1.runs || 0,
+                                balls: situ.batter1.balls || 0,
+                                fours: 0, sixes: 0,
+                                strikeRate: (situ.batter1.runs / (situ.batter1.balls || 1)) * 100,
+                                isBatting: true
+                            });
+                        }
+                        if (situ.batter2) {
+                            batters.push({
+                                name: situ.batter2.athlete?.displayName || 'Batter 2',
+                                runs: situ.batter2.runs || 0,
+                                balls: situ.batter2.balls || 0,
+                                fours: 0, sixes: 0,
+                                strikeRate: (situ.batter2.runs / (situ.batter2.balls || 1)) * 100,
+                                isBatting: false
+                            });
+                        }
+                        if (situ.bowler1) {
+                            bowlers.push({
+                                name: situ.bowler1.athlete?.displayName || 'Bowler',
+                                overs: situ.bowler1.overs || 0,
+                                runs: situ.bowler1.conceded || 0,
+                                wickets: situ.bowler1.wickets || 0
+                            });
+                        }
+                    }
                 } catch (e) {
-                    console.warn(`[Scraper] Commentary fetch failed for ${matchId}`);
+                    console.warn(`[Scraper] Commentary/Situation fetch failed for ${matchId}`);
                 }
             }
 
@@ -213,6 +247,8 @@ async function scrapeScores() {
                 status: mappedStatus,
                 statusText: summary || detail || status.type?.description || '',
                 live_commentary: live_commentary,
+                batters: batters,
+                bowlers: bowlers,
                 teamA: {
                     name: team1.team?.displayName || team1.team?.shortDisplayName || 'TBA',
                     score: team1.score || '',
