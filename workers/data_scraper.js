@@ -129,9 +129,9 @@ async function scrapeScores() {
             const detail = status.type?.shortDetail || status.type?.description || '';
             const summary = status.summary || '';
             
-            let mappedStatus = 'SCHEDULED';
+            let mappedStatus = 'UPCOMING';
             if (state === 'in') mappedStatus = 'LIVE';
-            else if (state === 'post') mappedStatus = 'FINISHED';
+            else if (state === 'post') mappedStatus = 'RESULT';
 
             const team1 = competitors.find(c => c.homeAway === 'home') || competitors[0];
             const team2 = competitors.find(c => c.homeAway === 'away') || competitors[1];
