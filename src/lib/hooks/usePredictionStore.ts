@@ -36,11 +36,11 @@ export function usePredictionStore(userId: string | null, matchId: string) {
       // Get current Match lock index
       const { data: match } = await supabase
         .from('matches')
-        .select('current_ball_index')
+        .select('*')
         .eq('id', matchId)
         .single();
       
-      if (match) setActiveBallIndex(match.current_ball_index);
+      if (match) setActiveBallIndex(match.current_ball_index || 0);
     };
 
     fetchState();
@@ -64,7 +64,7 @@ export function usePredictionStore(userId: string | null, matchId: string) {
         table: 'matches', 
         filter: `id=eq.${matchId}` 
       }, (payload: any) => {
-        setActiveBallIndex(payload.new.current_ball_index);
+        setActiveBallIndex(payload.new.current_ball_index || 0);
       })
       .subscribe();
 
