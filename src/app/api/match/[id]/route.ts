@@ -160,94 +160,167 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
     }
 
 
-        // Fetch Summary API for Commentary and Batters
-        try {
-            const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
-            const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 5000 });
-            const summaryData = summaryRes.data;
+    // Fetch Summary API for Commentary, Players, and Match Notes
+    try {
+        const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
+        const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 5000 });
+        const summaryData = summaryRes.data;
 
-            // 1. Commentary & NLP-derived coordinates
-            if (summaryData.plays && (Array.isArray(summaryData.plays) || Object.keys(summaryData.plays).length > 0)) {
-                const plays = Array.isArray(summaryData.plays) ? summaryData.plays : Object.values(summaryData.plays);
-                const sortedPlays = plays.sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0));
-                
-                result.live_commentary = sortedPlays.slice(0, 15).map((p: any) => ({
-                    over: String(p.over?.number || p.period || '0'),
-                    ball: `${p.over?.ball || ''}: ${p.title || p.text || ''}`.trim(),
-                    type: p.dismissal?.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
-                }));
+        // === 1. LIVE COMMENTARY from notes + roster dismissals ===
+        const commentary: any[] = [];
 
-                result.last_balls = sortedPlays.slice(0, 6).map((p: any, idx: number) => {
-                    const text = (p.text || '').toLowerCase();
-                    let x = 0.5, y = 0.6, angle = 0;
-                    
-                    if (text.includes('outside off') || text.includes('width')) x = 0.8;
-                    else if (text.includes('leg stump') || text.includes('pads')) x = 0.2;
-                    
-                    if (text.includes('short') || text.includes('bounced')) y = 0.3;
-                    else if (text.includes('full') || text.includes('half volley')) y = 0.8;
-                    else if (text.includes('yorker')) y = 1.0;
-                    
-                    if (text.includes('cover') || text.includes('point')) angle = 135;
-                    else if (text.includes('mid-off') || text.includes('long-off')) angle = 180;
-                    else if (text.includes('mid-on') || text.includes('long-on')) angle = 0;
-                    else if (text.includes('mid-wicket') || text.includes('square leg')) angle = 45;
-                    
-                    return {
-                        x, y, z: angle,
-                        type: p.scoreValue >= 4 ? 'pace' : 'spin',
-                        is_wicket: !!p.dismissal?.dismissal,
-                        timestamp: new Date(Date.now() - idx * 60000).toISOString()
+        // 1a. Match Notes (powerplays, milestones, reviews, strategic timeouts, innings breaks)
+        const notes = summaryData.notes || [];
+        const matchNotes = notes.filter((n: any) => n.type === 'matchnote');
+        matchNotes.reverse().forEach((note: any) => {
+            const text = note.text || '';
+            let type = 'normal';
+            if (text.toLowerCase().includes('wicket') || text.toLowerCase().includes('review')) type = 'wicket';
+            else if (text.toLowerCase().includes('50 runs') || text.toLowerCase().includes('100 runs') || text.toLowerCase().includes('150 runs')) type = 'milestone';
+            else if (text.toLowerCase().includes('innings break')) type = 'innings_break';
+            else if (text.toLowerCase().includes('powerplay')) type = 'powerplay';
+            else if (text.toLowerCase().includes('strategic timeout')) type = 'timeout';
+
+            // Extract over from text like "Strategic Timeout: LSG - 65/4 in 8.5 overs"
+            const overMatch = text.match(/(\d+\.?\d*)\s*ov/i);
+            commentary.push({
+                over: overMatch ? overMatch[1] : (note.section || ''),
+                ball: text,
+                type
+            });
+        });
+
+        // 1b. Dismissal details from rosters (rich ball-by-ball text for each wicket)
+        const rosters = summaryData.rosters || [];
+        rosters.forEach((roster: any) => {
+            (roster.roster || []).forEach((player: any) => {
+                const ls = player.linescores?.[0]?.linescores?.[0];
+                const outDetails = ls?.statistics?.batting?.outDetails;
+                if (outDetails?.details?.text) {
+                    commentary.push({
+                        over: String(outDetails.details.over?.overs || ''),
+                        ball: `🏏 OUT! ${outDetails.details.shortText} — ${outDetails.details.text}`,
+                        type: 'wicket'
+                    });
+                }
+            });
+        });
+
+        // Sort: most recent events first (higher over number = more recent)
+        commentary.sort((a: any, b: any) => {
+            const ovA = parseFloat(a.over) || 0;
+            const ovB = parseFloat(b.over) || 0;
+            return ovB - ovA;
+        });
+
+        // Add the current match status as the top commentary line
+        commentary.unshift({
+            over: result.overs,
+            ball: `📡 ${summaryText}`,
+            type: 'status'
+        });
+
+        result.live_commentary = commentary.slice(0, 20);
+
+        // === 2. PLAYER STATS from rosters (since situation is empty) ===
+        // Find the currently batting team's roster
+        const battingRosterId = isBattingA ? team1.team?.id : (isBattingB ? team2.team?.id : null);
+        const bowlingRosterId = isBattingA ? team2.team?.id : (isBattingB ? team1.team?.id : null);
+
+        // Determine which innings section to look at
+        const currentInningsSection = result.is_second_innings ? 1 : 0; // 0-indexed in rosters array
+
+        rosters.forEach((roster: any) => {
+            const teamId = roster.team?.id;
+            const isBattingRoster = String(teamId) === String(battingRosterId);
+            const isBowlingRoster = String(teamId) === String(bowlingRosterId);
+
+            (roster.roster || []).forEach((player: any) => {
+                const ls = player.linescores?.[0]?.linescores?.[0];
+                if (!ls) return;
+                const stats = ls.statistics?.categories?.[0]?.stats;
+                if (!stats) return;
+                const getStat = (name: string) => {
+                    const s = stats.find((s: any) => s.name === name);
+                    return s ? Number(s.value) : 0;
+                };
+
+                // Extract active batters (who batted and were NOT dismissed)
+                if (isBattingRoster && getStat('batted') === 1 && getStat('dismissal') === 0) {
+                    result.batters.push({
+                        name: player.athlete?.displayName || 'Unknown',
+                        runs: getStat('runs'),
+                        balls: getStat('ballsFaced'),
+                        fours: getStat('fours'),
+                        sixes: getStat('sixes'),
+                        strikeRate: getStat('strikeRate')
+                    });
+                }
+            });
+        });
+
+        // Limit to 2 batters (the current crease pair)
+        result.batters = result.batters.slice(0, 2);
+
+        // Extract bowlers from the bowling team's roster (look at bowling stats)
+        rosters.forEach((roster: any) => {
+            const teamId = roster.team?.id;
+            if (String(teamId) !== String(bowlingRosterId)) return;
+
+            (roster.roster || []).forEach((player: any) => {
+                // Bowlers have linescores in the batting team's innings period
+                const bowlLs = player.linescores?.[0]?.linescores;
+                if (!bowlLs) return;
+                bowlLs.forEach((ls: any) => {
+                    const bowlStats = ls.statistics?.categories?.[0]?.stats;
+                    if (!bowlStats) return;
+                    const getBowlStat = (name: string) => {
+                        const s = bowlStats.find((s: any) => s.name === name);
+                        return s ? Number(s.value) : 0;
                     };
+                    const overs = getBowlStat('overs');
+                    if (overs > 0) {
+                        result.bowlers.push({
+                            name: player.athlete?.displayName || 'Unknown',
+                            overs: overs,
+                            runs: getBowlStat('conceded'),
+                            wickets: getBowlStat('wickets'),
+                            economy: getBowlStat('economy')
+                        });
+                    }
                 });
-            } else {
-                // FALLBACK: Use status summary as a single commentary line if plays is empty
-                result.live_commentary = [{
-                    over: result.overs.split('.')[0],
-                    ball: `SYNC: ${summaryText}`,
-                    type: 'normal'
-                }];
-            }
+            });
+        });
 
-
-        // 2. Situational Players (Batters/Bowlers)
-        const situ = summaryData.situation;
-        if (situ) {
-            const b1 = situ.batter1 ? { 
-                name: situ.batter1.athlete?.displayName || 'Batter 1', 
-                runs: situ.batter1.runs || 0, 
-                balls: situ.batter1.balls || 0, 
-                fours: 0, sixes: 0, 
-                strikeRate: (situ.batter1.runs / (situ.batter1.balls || 1)) * 100,
-                isBatting: true 
-            } : null;
-            const b2 = situ.batter2 ? { 
-                name: situ.batter2.athlete?.displayName || 'Batter 2', 
-                runs: situ.batter2.runs || 0, 
-                balls: situ.batter2.balls || 0, 
-                fours: 0, sixes: 0, 
-                strikeRate: (situ.batter2.runs / (situ.batter2.balls || 1)) * 100,
-                isBatting: false 
-            } : null;
-            result.batters = [b1, b2].filter(Boolean);
-            
-            if (situ.bowler1) {
-                result.bowlers = [{
-                    name: situ.bowler1.athlete?.displayName || 'Bowler',
-                    overs: situ.bowler1.overs || 0,
-                    runs: situ.bowler1.conceded || 0,
-                    wickets: situ.bowler1.wickets || 0
-                }];
-            }
+        // Sort bowlers by most recent (highest overs), then take the current one
+        result.bowlers.sort((a: any, b: any) => b.overs - a.overs);
+        if (result.bowlers.length > 1) {
+            result.bowlers = [result.bowlers[0]]; // Show only the most active bowler
         }
 
-        // 3. Win Probability
+        // === 3. Win Probability from Odds ===
+        const odds = summaryData.odds?.[0];
+        if (odds?.homeTeamOdds && odds?.awayTeamOdds) {
+            // Parse fractional odds to implied probability
+            const parseOdds = (summary: string) => {
+                const parts = summary.split('/');
+                if (parts.length === 2) {
+                    const num = parseFloat(parts[0]);
+                    const den = parseFloat(parts[1]);
+                    return den / (num + den);
+                }
+                return 0.5;
+            };
+            result.win_prob_a = parseOdds(odds.homeTeamOdds.odds?.summary || '1/1');
+            result.win_prob_b = parseOdds(odds.awayTeamOdds.odds?.summary || '1/1');
+        }
+
         if (summaryData.predictor?.homeTeam) {
             result.win_prob_a = (summaryData.predictor.homeTeam.gameProjection || 50) / 100;
             result.win_prob_b = 1 - result.win_prob_a;
         }
     } catch {
-        // Summary fetch failure is non-fatal
+        // Summary fetch failure is non-fatal — scoreboard data still drives the score
     }
 
     return result;
