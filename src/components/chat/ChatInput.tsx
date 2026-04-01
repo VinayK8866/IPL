@@ -77,7 +77,8 @@ export const ChatInput = ({ matchId }: ChatInputProps) => {
           type="text" 
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          placeholder="SEND DATA TO HYPE..."
+          placeholder="JOIN THE ROAR..."
+
           disabled={isSending}
           className="w-full bg-[#0B0E14] border-2 border-blue-500/20 rounded-lg py-3 px-4 pr-12 text-blue-100 placeholder-blue-900/50 focus:outline-none focus:border-pink-500/50 focus:ring-1 focus:ring-pink-500/20 transition-all font-mono italic"
         />

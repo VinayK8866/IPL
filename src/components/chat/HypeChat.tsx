@@ -40,12 +40,14 @@ export const HypeChat = ({ matchId }: HypeChatProps) => {
       <div className="p-4 border-b border-blue-500/20 bg-gradient-to-r from-navy-950/80 to-[#0B0E14] flex justify-between items-center relative z-20">
         <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-blue-400 flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-pink-500 animate-pulse shadow-[0_0_8px_#FF3366]" />
-          FEED_SYNC_BETA
+          THE GROUND STAND
         </h3>
+
         <div className="flex items-center gap-2">
-           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Fans:</span>
+           <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">IN THE STADIUM:</span>
            <span className="text-[10px] font-black text-blue-400 tabular-nums">1,242</span>
         </div>
+
       </div>
 
       {/* Pinned Expert Insight Overlay */}
@@ -63,7 +65,8 @@ export const HypeChat = ({ matchId }: HypeChatProps) => {
                   <div className="p-1 bg-purple-600 rounded-sm">
                     <ShieldAlert size={10} className="text-white" />
                   </div>
-                  <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">Global Insight</span>
+                  <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest">EXPERT OPINION</span>
+
                </div>
                <p className="text-[11px] text-gray-200 italic leading-tight">
                   "{pinnedInsight.content}"

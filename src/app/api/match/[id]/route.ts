@@ -115,8 +115,11 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         win_prob_b: isBattingB ? 0.55 : 0.45,
         status: mappedStatus,
         status_text: summaryText,
+        is_second_innings: false,
+        target: 0,
         predicted_score: 0,
         timestamp: new Date().toISOString(),
+
         series: seriesName,
         live_commentary: [],
         batters: [],
@@ -137,47 +140,75 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
     result.crr = oversFloat > 0.1 ? parseFloat((runsVal / oversFloat).toFixed(2)) : 0;
     result.predicted_score = Math.round(result.crr * 20);
 
-    // Fetch Summary API for Commentary and Batters
-    try {
-        const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
-        const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 4000 });
-        const summaryData = summaryRes.data;
-
-        // 1. Commentary & NLP-derived coordinates (JUGAAD)
-        if (summaryData.plays) {
-            const plays = Array.isArray(summaryData.plays) ? summaryData.plays : Object.values(summaryData.plays);
-            const sortedPlays = plays.sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0));
-            
-            result.live_commentary = sortedPlays.slice(0, 15).map((p: any) => ({
-                over: String(p.over?.number || p.period || '0'),
-                ball: `${p.over?.ball || ''}: ${p.title || p.text || ''}`.trim(),
-                type: p.dismissal?.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
-            }));
-
-            result.last_balls = sortedPlays.slice(0, 6).map((p: any, idx: number) => {
-                const text = (p.text || '').toLowerCase();
-                let x = 0.5, y = 0.6, angle = 0;
-                
-                if (text.includes('outside off') || text.includes('width')) x = 0.8;
-                else if (text.includes('leg stump') || text.includes('pads')) x = 0.2;
-                
-                if (text.includes('short') || text.includes('bounced')) y = 0.3;
-                else if (text.includes('full') || text.includes('half volley')) y = 0.8;
-                else if (text.includes('yorker')) y = 1.0;
-                
-                if (text.includes('cover') || text.includes('point')) angle = 135;
-                else if (text.includes('mid-off') || text.includes('long-off')) angle = 180;
-                else if (text.includes('mid-on') || text.includes('long-on')) angle = 0;
-                else if (text.includes('mid-wicket') || text.includes('square leg')) angle = 45;
-                
-                return {
-                    x, y, z: angle,
-                    type: p.scoreValue >= 4 ? 'pace' : 'spin',
-                    is_wicket: !!p.dismissal?.dismissal,
-                    timestamp: new Date(Date.now() - idx * 60000).toISOString()
-                };
-            });
+    // Detect Second Innings and Target from summaryText
+    // Common formats: "Team Need 123 runs from 60 balls", "Team Need 123 runs"
+    if (summaryText.toLowerCase().includes('need')) {
+        const match = summaryText.match(/need\s+(\d+)\s+runs/i);
+        if (match) {
+            result.is_second_innings = true;
+            const remainingRuns = parseInt(match[1]);
+            result.target = runsVal + remainingRuns;
         }
+    }
+
+    // Fallback detection: If batting team score < target score of first team
+    const t1_score = parseInt(team1.score?.split('/')?.[0]) || 0;
+    const t2_score = parseInt(team2.score?.split('/')?.[0]) || 0;
+    if (!result.is_second_innings && t1_score > 0 && t2_score > 0) {
+       result.is_second_innings = true;
+       result.target = Math.max(t1_score, t2_score) + 1;
+    }
+
+
+        // Fetch Summary API for Commentary and Batters
+        try {
+            const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
+            const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 5000 });
+            const summaryData = summaryRes.data;
+
+            // 1. Commentary & NLP-derived coordinates
+            if (summaryData.plays && (Array.isArray(summaryData.plays) || Object.keys(summaryData.plays).length > 0)) {
+                const plays = Array.isArray(summaryData.plays) ? summaryData.plays : Object.values(summaryData.plays);
+                const sortedPlays = plays.sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0));
+                
+                result.live_commentary = sortedPlays.slice(0, 15).map((p: any) => ({
+                    over: String(p.over?.number || p.period || '0'),
+                    ball: `${p.over?.ball || ''}: ${p.title || p.text || ''}`.trim(),
+                    type: p.dismissal?.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
+                }));
+
+                result.last_balls = sortedPlays.slice(0, 6).map((p: any, idx: number) => {
+                    const text = (p.text || '').toLowerCase();
+                    let x = 0.5, y = 0.6, angle = 0;
+                    
+                    if (text.includes('outside off') || text.includes('width')) x = 0.8;
+                    else if (text.includes('leg stump') || text.includes('pads')) x = 0.2;
+                    
+                    if (text.includes('short') || text.includes('bounced')) y = 0.3;
+                    else if (text.includes('full') || text.includes('half volley')) y = 0.8;
+                    else if (text.includes('yorker')) y = 1.0;
+                    
+                    if (text.includes('cover') || text.includes('point')) angle = 135;
+                    else if (text.includes('mid-off') || text.includes('long-off')) angle = 180;
+                    else if (text.includes('mid-on') || text.includes('long-on')) angle = 0;
+                    else if (text.includes('mid-wicket') || text.includes('square leg')) angle = 45;
+                    
+                    return {
+                        x, y, z: angle,
+                        type: p.scoreValue >= 4 ? 'pace' : 'spin',
+                        is_wicket: !!p.dismissal?.dismissal,
+                        timestamp: new Date(Date.now() - idx * 60000).toISOString()
+                    };
+                });
+            } else {
+                // FALLBACK: Use status summary as a single commentary line if plays is empty
+                result.live_commentary = [{
+                    over: result.overs.split('.')[0],
+                    ball: `SYNC: ${summaryText}`,
+                    type: 'normal'
+                }];
+            }
+
 
         // 2. Situational Players (Batters/Bowlers)
         const situ = summaryData.situation;

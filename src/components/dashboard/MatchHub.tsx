@@ -56,9 +56,10 @@ export const MatchHub = () => {
             </Link>
             <div className="flex flex-col">
               <h1 className="text-sm font-black text-white italic tracking-tighter uppercase leading-none">
-                Visual <span className="text-[#FF3366]">Hub</span>
+                MATCH <span className="text-[#FF3366]">CENTER</span>
               </h1>
-              <span className="text-[9px] font-black text-gray-600 tracking-[0.3em] uppercase mt-1">ID: {id}</span>
+              <span className="text-[9px] font-black text-gray-600 tracking-[0.3em] uppercase mt-1">MATCH KEY: {id}</span>
+
             </div>
           </div>
           
@@ -68,7 +69,8 @@ export const MatchHub = () => {
               <RealtimeStatus matchId={id as string} />
               <div className="hidden sm:flex items-center gap-1 ml-4 bg-[#7A3FE1]/10 px-3 py-1 border border-[#7A3FE1]/20 skew-x-[-15deg]">
                   <Zap size={10} className="text-[#7A3FE1] fill-[#7A3FE1]" />
-                  <span className="text-[10px] font-black text-[#7A3FE1] uppercase">PROG V3</span>
+                  <span className="text-[10px] font-black text-[#7A3FE1] uppercase">ULTRA HD V3</span>
+
               </div>
           </div>
         </header>
@@ -86,17 +88,18 @@ export const MatchHub = () => {
                <AINarrator matchId={id as string} />
             </div>
             
-            {/* Performance Metadata */}
+            {/* LIVE FEEDS & ANALYTICS */}
             <div className="mt-auto pt-6 border-t border-white/5 grid grid-cols-2 gap-4">
                 <div className="bg-[#05070A] p-3 border border-white/5 skew-x-[-10deg]">
-                    <span className="block text-[8px] font-black text-gray-500 uppercase">Input Latency</span>
+                    <span className="block text-[8px] font-black text-gray-500 uppercase">BROADCAST DELAY</span>
                     <span className="text-xs font-black text-[#7A3FE1] tabular-nums">{(getOffset() * 1000).toFixed(0)}ms</span>
                 </div>
                 <div className="bg-[#05070A] p-3 border border-white/5 skew-x-[-10deg]">
-                    <span className="block text-[8px] font-black text-gray-500 uppercase">Data Stream</span>
+                    <span className="block text-[8px] font-black text-gray-500 uppercase">LIVE FEED</span>
                     <span className="text-xs font-black text-[#FF3366] tabular-nums">SYNCED</span>
                 </div>
             </div>
+
           </div>
   
           {/* CENTER COLUMN: 3D Visualization & Broadcast (6 cols) */}
@@ -111,8 +114,9 @@ export const MatchHub = () => {
               {/* Visual Overlays */}
               <div className="absolute top-6 left-6 pointer-events-none">
                   <div className="flex flex-col gap-1">
-                      <span className="text-[50px] font-black italic text-white/5 leading-none tracking-tighter">PULSE_VIEW</span>
-                      <span className="text-[10px] font-black text-[#7A3FE1]/60 tracking-[1em] uppercase -mt-2">Real-time Kinematics</span>
+                      <span className="text-[50px] font-black italic text-white/5 leading-none tracking-tighter">LIVE_TRACKING</span>
+                      <span className="text-[10px] font-black text-[#7A3FE1]/60 tracking-[1em] uppercase -mt-2">SHOT ANALYSIS</span>
+
                   </div>
               </div>
             </div>
@@ -143,8 +147,9 @@ export const MatchHub = () => {
   
         </main>
   
-        {/* ADMIN PROTOCOL OVERRIDE */}
+        {/* BROADCASTER OVERRIDE */}
         <AdminControls matchId={id as string} />
+
   
         <style jsx global>{`
           .no-scrollbar::-webkit-scrollbar { display: none; }

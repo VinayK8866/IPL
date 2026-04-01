@@ -49,19 +49,23 @@ export function useCricketRealtime(matchId: string) {
       match_id: matchData.id || matchData.match_id,
       team_a: matchData.team_a || matchData.teamA?.name || 'TBA',
       team_b: matchData.team_b || matchData.teamB?.name || 'TBA',
-      score: matchData.score || matchData.teamA?.score || matchData.teamB?.score || '0/0',
+      score: (matchData.score && matchData.score !== '0/0') ? matchData.score : (matchData.teamA?.score || matchData.teamB?.score || '0/0'),
       overs: matchData.overs || matchData.teamA?.overs || matchData.teamB?.overs || '0.0',
       crr: matchData.crr || 0,
       predicted_score: matchData.predicted_score || matchData.predictedScore || 0,
       status_text: matchData.status_text || matchData.statusText || '',
       win_prob_a: matchData.win_prob_a ?? (matchData.winProbA ?? 0.5),
       win_prob_b: matchData.win_prob_b ?? (matchData.winProbB ?? 0.5),
+      is_second_innings: matchData.is_second_innings || false,
+      target: matchData.target || 0,
       batters: matchData.batters || [],
       bowlers: matchData.bowlers || [],
       last_balls: matchData.last_balls || [],
       live_commentary: matchData.live_commentary || [],
       timestamp: matchData.timestamp || new Date().toISOString()
+
     };
+
 
     const normalizedMomentum: MomentumData = {
       match_id: normalizedScore.match_id,

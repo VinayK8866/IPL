@@ -24,17 +24,20 @@ export function useChatSync(matchId: string) {
     const fetchInitial = async () => {
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('*, profiles(username, avatar_url, fan_coins)')
+        .select('id, content, is_hype_insight, created_at, profiles(username, avatar_url)')
         .eq('match_id', matchId)
         .order('created_at', { ascending: false })
         .limit(50);
       
       if (!error && data) {
-        setMessages(data.reverse());
+        setMessages(data.reverse() as ChatMessage[]);
+      } else if (error) {
+        console.error('[ChatSync] Initial fetch error:', error.message);
       }
     };
 
     fetchInitial();
+
 
     const channel = supabase
       .channel(`chat:${matchId}`)

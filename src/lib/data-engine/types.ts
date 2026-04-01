@@ -57,7 +57,10 @@ export interface MatchScore {
   last_balls: BallData[];
   status?: string;
   status_text?: string;
+  is_second_innings: boolean;
+  target?: number;
   predicted_score?: number;
+
   live_commentary?: any[];
   timestamp: string;
 }

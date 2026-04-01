@@ -61,7 +61,8 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
       {/* Adrenaline Ticker Header */}
       <div className="flex justify-between items-end mb-6">
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.4em] uppercase mb-1">Fan-Coin Wallet</span>
+          <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.4em] uppercase mb-1">YOUR PURSE</span>
+
           <div className="flex items-baseline gap-2">
             <motion.span 
               key={balance}
@@ -76,10 +77,12 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
         </div>
 
         <div className="flex flex-col items-end">
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Next Ball Lock</span>
+          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">NEXT BALL</span>
+
           <span className="text-sm font-black italic text-white bg-[#1A1F29] px-2 py-1 skew-x-[-10deg]">
-             BALL INDEX {targetBallIndex}
+             DELIVERY {targetBallIndex}
           </span>
+
         </div>
       </div>
 
@@ -120,7 +123,8 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
                 {outcome.label}
               </span>
             </div>
-            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Bet</span>
+            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">PICK</span>
+
           </motion.button>
         ))}
       </div>
@@ -129,8 +133,9 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
       <div className="mt-6 flex items-center justify-center gap-4 bg-white/5 p-2 skew-x-[-5deg]">
         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-          Sync Active: Lag Override {offset}s
+          BROADCAST LIVE SYNC | {offset}s DELAY
         </span>
+
       </div>
 
       {/* Cyber-VFX Background Accents */}

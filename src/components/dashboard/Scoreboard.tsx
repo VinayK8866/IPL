@@ -68,36 +68,43 @@ const ActiveBatter = React.memo(({ batter, matchId }: { batter: Batter; matchId:
 });
 ActiveBatter.displayName = 'ActiveBatter';
 
-// Sub-component: Team Stats
 const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
   <div className="flex flex-col gap-4 p-6 bg-[#0B0E14] border border-white/5 relative overflow-hidden">
     <div className="flex justify-between items-start">
       <div className="flex flex-col">
-        <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.2em] uppercase mb-1">Live Scoreboard</span>
+        <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.2em] uppercase mb-1">
+          {score.status_text && score.status_text.includes('Live') ? 'LIVE STATS' : score.status_text || 'MATCH BOARD'}
+        </span>
+
         <div className="flex items-baseline gap-3">
-          <Counter value={score.score} className="text-5xl font-black italic tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" />
+          <Counter value={score.score === '0/0' && score.status_text ? 'LIVE' : score.score} className="text-5xl font-black italic tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" />
           <div className="flex flex-col">
             <span className="text-sm font-black text-gray-400">({score.overs})</span>
           </div>
         </div>
       </div>
+
       
       <div className="flex flex-col items-end shrink-0 ml-4">
         <span className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest text-right">{score.team_a} vs {score.team_b}</span>
         <div className="mt-2 text-right">
-          <div className="text-[8px] text-gray-400 font-black uppercase leading-none tracking-tighter">Net Run Rate</div>
+          <div className="text-[8px] text-gray-400 font-black uppercase leading-none tracking-tighter">RUN RATE</div>
           <div className="text-xl font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</div>
+
         </div>
       </div>
     </div>
 
     {/* Predicted Final Score Placeholder */}
     <div className="bg-[#1A1F29] border-l-2 border-[#FFD700] p-2 flex justify-between items-center">
-      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Predicted Target</span>
+      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+        {score.is_second_innings ? 'Chase Target' : 'Predicted Final'}
+      </span>
       <span className="text-sm font-black italic text-[#FFD700]">
-        ~{score.predicted_score || Math.round((score.crr || 0) * 20)}
+        {score.is_second_innings ? score.target : `~${score.predicted_score || Math.round((score.crr || 0) * 20)}`}
       </span>
     </div>
+
   </div>
 ));
 TeamStats.displayName = 'TeamStats';
@@ -105,10 +112,11 @@ TeamStats.displayName = 'TeamStats';
 // Sub-component: Prediction Ticker
 const PredictionTicker = React.memo(({ score }: { score: MatchScore }) => {
   const predictionText = useMemo(() => {
-    if (!score) return "INITIALIZING AI PREDICTIONS...";
+    if (!score) return "READING THE GAME...";
     const team = score.win_prob_a > score.win_prob_b ? score.team_a : score.team_b;
     const prob = Math.max(score.win_prob_a, score.win_prob_b) * 100;
-    return `⚡ GEMINI PREDICTION: ${team} WIN PROBABILITY ${prob.toFixed(0)}% | MATCH MOMENTUM SHIFTING... | NEXT EVENT LIKELY IN 3 BALLS`;
+    return `⚡ AI PREDICTION: ${team} WIN CHANCE ${prob.toFixed(0)}% | MATCH MOMENTUM SHIFTING... | NEXT EVENT LIKELY IN 3 BALLS`;
+
   }, [score]);
 
   return (
@@ -135,7 +143,8 @@ PredictionTicker.displayName = 'PredictionTicker';
 const ActiveBowler = React.memo(({ bowler }: { bowler: any }) => (
   <div className="bg-[#05070A]/80 border-t border-white/5 p-3 flex justify-between items-center group">
     <div className="flex flex-col">
-       <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Active Bowler</span>
+       <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">BALLING NOW</span>
+
        <span className="text-xs font-black italic text-[#FF3366] uppercase">{bowler.name}</span>
     </div>
     <div className="flex gap-6">
@@ -168,7 +177,9 @@ export const Scoreboard = React.memo(({ matchId }: { matchId: string }) => {
     batters: [],
     bowlers: [],
     last_balls: [],
+    is_second_innings: false,
     timestamp: new Date().toISOString()
+
   };
 
   const currentScore = score || fallbackScore;
