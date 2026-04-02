@@ -42,6 +42,14 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                     label = '★';
                     color = '#FFD700';
                     icon = '⭐';
+                } else if (type === 'four' || type === 'boundary_four') {
+                    label = '4';
+                    color = '#00F0FF';
+                    icon = '🏏';
+                } else if (type === 'six' || type === 'boundary_six') {
+                    label = '6';
+                    color = '#FF3366';
+                    icon = '⚡';
                 } else if (type === 'powerplay') {
                     label = 'PP';
                     color = '#7A3FE1';
@@ -59,7 +67,7 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                     color = '#FFFFFF';
                     icon = '🏏';
                 } else if (type === 'dot') {
-                    label = '•';
+                    label = '0';
                     color = '#4B5563';
                     icon = '📋';
                 } else {

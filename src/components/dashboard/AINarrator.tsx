@@ -131,15 +131,18 @@ export default function AINarrator({ matchId }: { matchId: string }) {
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
                      {item.type === 'six' && <Zap size={12} className="text-[#FF3366] animate-pulse" />}
+                     {item.type === 'four' && <Zap size={12} className="text-[#00F0FF] animate-pulse" />}
                      {item.type === 'wicket' && <ShieldAlert size={12} className="text-[#7A3FE1] animate-bounce" />}
                      <span className={`text-[9px] font-black uppercase tracking-widest ${
                        item.type === 'six' ? 'text-[#FF3366]' : 
+                       item.type === 'four' ? 'text-[#00F0FF]' : 
                        item.type === 'wicket' ? 'text-[#7A3FE1]' : 
                        'text-white/40'
                      }`}>
-                       {item.type === 'six' ? 'High Impact Event' : 
-                        item.type === 'wicket' ? 'Crucial Dismissal' : 
-                        'Normal Delivery'}
+                       {item.type === 'six' ? 'MAXIMUM IMPACT' : 
+                        item.type === 'four' ? 'BOUNDARY REACHED' : 
+                        item.type === 'wicket' ? 'CRUCIAL DISMISSAL' : 
+                        'Match Progress'}
                      </span>
                   </div>
                   <p className={`text-sm md:text-lg font-black italic tracking-tight leading-tight uppercase ${
