@@ -142,7 +142,13 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
     const wicketsVal = parseInt(scoreParts[1]) || 0;
     
     result.crr = oversFloat > 0.1 ? parseFloat((runsVal / oversFloat).toFixed(2)) : 0;
-    result.predicted_score = Math.round(result.crr * (result.over_limit || 20));
+    
+    // PROJECTED SCORE: Use current score as floor. Project remaining overs based on CRR.
+    const projectOverLimit = result.over_limit || 20;
+    const remainingOvers = Math.max(0, projectOverLimit - oversFloat);
+    const projectedRuns = runsVal + Math.round(result.crr * remainingOvers);
+    
+    result.predicted_score = Math.max(runsVal, projectedRuns);
 
     // Detect Second Innings and Target
     const t1_score = parseInt(team1.score?.split('/')?.[0]) || 0;

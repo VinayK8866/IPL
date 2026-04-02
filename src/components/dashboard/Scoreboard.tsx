@@ -101,7 +101,10 @@ const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
         {score.is_second_innings ? 'Chase Target' : 'Predicted Final'}
       </span>
       <span className="text-sm font-black italic text-[#FFD700]">
-        {score.is_second_innings ? score.target : `~${score.predicted_score || Math.round((score.crr || 0) * 20)}`}
+        {score.is_second_innings 
+          ? (score.target || 'TBA') 
+          : `~${Math.max(parseInt(score.score.split('/')[0]) || 0, score.predicted_score || Math.round((score.crr || 0) * 20))}`
+        }
       </span>
     </div>
 
