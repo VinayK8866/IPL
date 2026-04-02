@@ -63,7 +63,7 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                     color = '#FFD700';
                     icon = '🔄';
                 } else if (type === 'runs') {
-                    label = String(c.runs || '•');
+                    label = String(c.runs);
                     color = '#FFFFFF';
                     icon = '🏏';
                 } else if (type === 'dot') {
@@ -71,7 +71,7 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                     color = '#4B5563';
                     icon = '📋';
                 } else {
-                    label = '•';
+                    label = c.runs !== undefined ? String(c.runs) : '•';
                     color = '#374151';
                     icon = '📋';
                 }

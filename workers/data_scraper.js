@@ -214,34 +214,62 @@ async function scrapeScores() {
                         overLimit = summaryData.event.competitions[0].overLimit;
                     }
 
-                    // 1. Commentary (from plays + rosters)
-                    const plays = summaryData.plays || [];
-                    const playEvents = (plays || []).slice(0, 10).map(p => {
-                        let type = 'normal';
-                        let scoreVal = p.scoreValue || 0;
-                        if (p.dismissal) type = 'wicket';
-                        else if (scoreVal === 6) type = 'six';
-                        else if (scoreVal === 4) type = 'four';
-                        else if (scoreVal === 0) type = 'dot';
-                        else if (scoreVal > 0) type = 'runs';
+                    // 1. Commentary (Unified High-Performance Consumer API + Fallbacks)
+                    try {
+                        const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${matchId}&sortDirection=DESC`;
+                        const commentaryV1Res = await axios.get(commentaryV1Url, { timeout: 5000 });
+                        const commentaryV1Data = commentaryV1Res.data;
 
-                        return {
-                            over: p.over?.number || '0',
-                            ball: p.over?.ball + ': ' + (p.title || p.text || ''),
-                            type: type,
-                            runs: scoreVal
-                        };
-                    });
+                        if (commentaryV1Data?.comments?.length > 0) {
+                            live_commentary = commentaryV1Data.comments.slice(0, 15).map((c) => {
+                                let type = 'normal';
+                                const runs = c.runs || 0;
+                                if (c.isWicket) type = 'wicket';
+                                else if (c.isFour) type = 'four';
+                                else if (c.isSix) type = 'six';
+                                else if (runs === 0) type = 'dot';
+                                else if (runs > 0) type = 'runs';
 
-                    // 1b. Roster dismissals for wickets
-                    const commentary = [];
+                                return {
+                                    over: String(c.overActual || c.overNumber || '0'),
+                                    ball: c.title || c.commentaryText?.substring(0, 100) || '',
+                                    type: type,
+                                    runs: runs
+                                };
+                            });
+                        } else {
+                            // Fallback to legacy plays
+                            const plays = summaryData.plays || [];
+                            live_commentary = (plays || []).slice(0, 10).map(p => {
+                                let type = 'normal';
+                                let scoreVal = p.scoreValue || 0;
+                                if (p.dismissal) type = 'wicket';
+                                else if (scoreVal === 6) type = 'six';
+                                else if (scoreVal === 1) type = 'runs';
+                                else if (scoreVal === 4) type = 'four';
+                                else if (scoreVal === 0) type = 'dot';
+                                else if (scoreVal > 0) type = 'runs';
+
+                                return {
+                                    over: p.over?.number || '0',
+                                    ball: p.over?.ball + ': ' + (p.title || p.text || ''),
+                                    type: type,
+                                    runs: scoreVal
+                                };
+                            });
+                        }
+                    } catch (e) {
+                         console.warn(`[Scraper] Commentary redirect failed for ${matchId}`);
+                    }
+
+                    // 1b. Roster dismissals for wickets (Always merge these for richness)
                     const rosters = summaryData.rosters || [];
                     rosters.forEach((roster) => {
                         (roster.roster || []).forEach((player) => {
                             const ls = player.linescores?.[0];
                             const outDetails = ls?.statistics?.batting?.outDetails;
                             if (outDetails?.details?.text) {
-                                commentary.push({
+                                live_commentary.push({
                                     over: String(outDetails.details.over?.overs || ''),
                                     ball: `🏏 OUT! ${outDetails.details.shortText} — ${outDetails.details.text}`,
                                     type: 'wicket'
@@ -250,7 +278,7 @@ async function scrapeScores() {
                         });
                     });
 
-                    live_commentary = [...commentary, ...playEvents].sort((a, b) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
+                    live_commentary = live_commentary.sort((a, b) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
 
                     // 2. Batters & Bowlers (SITUATION DATA)
                     const situ = summaryData.situation;

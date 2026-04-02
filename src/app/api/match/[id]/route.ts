@@ -248,24 +248,52 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             });
         });
 
-        // 1c. Ball-by-ball plays (if available)
-        const plays = summaryData.plays || [];
-        (plays || []).slice(0, 10).forEach((p: any) => {
-            let type = 'normal';
-            let scoreVal = p.scoreValue || 0;
-            if (p.dismissal) type = 'wicket';
-            else if (scoreVal === 6) type = 'six';
-            else if (scoreVal === 4) type = 'four';
-            else if (scoreVal === 0) type = 'dot';
-            else if (scoreVal > 0) type = 'runs';
+        // 1c. Ball-by-ball plays (Unified High-Performance Consumer API + Fallback)
+        try {
+            const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${eventId}&sortDirection=DESC`;
+            const commentaryV1Res = await axios.get(commentaryV1Url, { headers: ESPN_HEADERS, timeout: 5000 });
+            const commentaryV1Data = commentaryV1Res.data;
 
-            commentary.push({
-                over: p.over?.number || '0',
-                ball: `${p.over?.ball || '0'}: ${p.title || p.text || ''}`,
-                type: type,
-                runs: scoreVal
-            });
-        });
+            if (commentaryV1Data?.comments?.length > 0) {
+                commentaryV1Data.comments.slice(0, 15).forEach((c: any) => {
+                    let type = 'normal';
+                    const runs = c.runs || 0;
+                    if (c.isWicket) type = 'wicket';
+                    else if (c.isFour) type = 'four';
+                    else if (c.isSix) type = 'six';
+                    else if (runs === 0) type = 'dot';
+                    else if (runs > 0) type = 'runs';
+
+                    commentary.push({
+                        over: String(c.overActual || c.overNumber || '0'),
+                        ball: c.title || c.commentaryText?.substring(0, 100) || '',
+                        type: type,
+                        runs: runs
+                    });
+                });
+            } else {
+                // Secondary Fallback: Ball-by-ball plays (original site API)
+                const plays = summaryData.plays || [];
+                (plays || []).slice(0, 10).forEach((p: any) => {
+                    let type = 'normal';
+                    let scoreVal = p.scoreValue || 0;
+                    if (p.dismissal) type = 'wicket';
+                    else if (scoreVal === 6) type = 'six';
+                    else if (scoreVal === 4) type = 'four';
+                    else if (scoreVal === 0) type = 'dot';
+                    else if (scoreVal > 0) type = 'runs';
+
+                    commentary.push({
+                        over: p.over?.number || '0',
+                        ball: `${p.over?.ball || '0'}: ${p.title || p.text || ''}`,
+                        type: type,
+                        runs: scoreVal
+                    });
+                });
+            }
+        } catch (err) {
+             console.warn('[API] Recovery fallback: Consumer commentary failed');
+        }
 
         // Sort: most recent events first (higher over number = more recent)
         commentary.sort((a: any, b: any) => {
