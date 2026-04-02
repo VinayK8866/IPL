@@ -51,9 +51,24 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
 
   // Winning Feedback Trigger
   useEffect(() => {
-    // This would ideally listen to a specific 'won' event from Supabase Realtime
-    // For now, we simulate success for demo effects if balance jumps
-  }, [balance]);
+    if (balance > 0 && lastWin === null) {
+       setLastWin(balance);
+       return;
+    }
+
+    if (lastWin !== null && balance > lastWin) {
+       // VICTORY DETECTED!
+       confetti({
+         particleCount: 150,
+         spread: 70,
+         origin: { y: 0.6 },
+         colors: ['#FFD700', '#7A3FE1', '#FF3366']
+       });
+       setLastWin(balance);
+    } else if (balance !== lastWin) {
+       setLastWin(balance);
+    }
+  }, [balance, lastWin]);
 
   return (
     <div className="w-full bg-[#0B0E14] border-l-4 border-[#7A3FE1] p-6 shadow-2xl relative overflow-hidden group">
@@ -66,8 +81,8 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
           <div className="flex items-baseline gap-2">
             <motion.span 
               key={balance}
-              initial={{ scale: 1.2, color: '#FFD700' }}
-              animate={{ scale: 1, color: '#FFFFFF' }}
+              initial={{ scale: 1.5, color: '#FFD700', filter: 'brightness(2)' }}
+              animate={{ scale: 1, color: '#FFFFFF', filter: 'brightness(1)' }}
               className="text-4xl font-black italic tracking-tighter"
             >
               {balance.toLocaleString()}
@@ -79,10 +94,9 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
         <div className="flex flex-col items-end">
           <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">NEXT BALL</span>
 
-          <span className="text-sm font-black italic text-white bg-[#1A1F29] px-2 py-1 skew-x-[-10deg]">
+          <span className="text-sm font-black italic text-white bg-[#1A1F29] px-2 py-1 skew-x-[-10deg] border-r-2 border-[#FF3366]">
              DELIVERY {targetBallIndex}
           </span>
-
         </div>
       </div>
 
@@ -93,7 +107,7 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
             key={amt}
             onClick={() => setSelectedAmount(amt)}
             className={`py-2 text-xs font-black italic border-b-2 transition-all 
-              ${selectedAmount === amt ? 'bg-[#7A3FE1] border-[#FFD700] text-white' : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'}
+              ${selectedAmount === amt ? 'bg-[#7A3FE1] border-[#FFD700] text-white shadow-[0_0_15px_rgba(122,63,225,0.4)]' : 'bg-white/5 border-transparent text-gray-500 hover:bg-white/10'}
             `}
           >
             {amt} FC
@@ -113,7 +127,7 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
             className="flex flex-col items-center gap-2 group/btn"
           >
             <div className={`w-full aspect-square flex items-center justify-center relative overflow-hidden transition-all duration-300
-              ${isSyncing ? 'opacity-50 grayscale' : 'opacity-100'}
+              ${isSyncing ? 'opacity-50 grayscale cursor-not-allowed' : 'opacity-100'}
             `}>
               {/* Animated Glow Border */}
               <div className={`absolute inset-0 ${outcome.bg} opacity-20 group-hover/btn:opacity-40`} />
@@ -123,19 +137,23 @@ export const PredictionInterface: React.FC<PredictionInterfaceProps> = ({ userId
                 {outcome.label}
               </span>
             </div>
-            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">PICK</span>
+            <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest group-hover/btn:text-white transition-colors">BET</span>
 
           </motion.button>
         ))}
       </div>
 
       {/* Match Delay Overlay Sync UI */}
-      <div className="mt-6 flex items-center justify-center gap-4 bg-white/5 p-2 skew-x-[-5deg]">
-        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
-          BROADCAST LIVE SYNC | {offset}s DELAY
+      <div className="mt-6 flex items-center justify-between bg-white/5 p-2 skew-x-[-5deg] border border-white/5">
+        <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+              BROADCAST SYNC: {offset}s DELAY
+            </span>
+        </div>
+        <span className="text-[9px] font-black italic text-[#7A3FE1] animate-pulse">
+            AGGREGATING WORLDWIDE BETS...
         </span>
-
       </div>
 
       {/* Cyber-VFX Background Accents */}

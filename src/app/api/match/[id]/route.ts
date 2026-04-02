@@ -137,12 +137,19 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
     result.overs = String(battingLS?.overs || battingLS?.displayValue || '0.0');
 
     const oversFloat = parseOvers(result.overs);
-    const runsVal = parseInt(result.score.split('/')[0]) || 0;
+    const scoreParts = result.score.split('/');
+    const runsVal = parseInt(scoreParts[0]) || 0;
+    const wicketsVal = parseInt(scoreParts[1]) || 0;
+    
     result.crr = oversFloat > 0.1 ? parseFloat((runsVal / oversFloat).toFixed(2)) : 0;
     result.predicted_score = Math.round(result.crr * (result.over_limit || 20));
 
-    // Detect Second Innings and Target from summaryText
-    // Common formats: "Team Need 123 runs from 60 balls", "Team Need 123 runs"
+    // Detect Second Innings and Target
+    const t1_score = parseInt(team1.score?.split('/')?.[0]) || 0;
+    const t2_score = parseInt(team2.score?.split('/')?.[0]) || 0;
+    
+    // Improved detection: if the designated non-batting team has a score recorded, 
+    // and the batting team is different, it's a second innings.
     if (summaryText.toLowerCase().includes('need')) {
         const match = summaryText.match(/need\s+(\d+)\s+runs/i);
         if (match) {
@@ -152,13 +159,34 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         }
     }
 
-    // Fallback detection: If batting team score < target score of first team
-    const t1_score = parseInt(team1.score?.split('/')?.[0]) || 0;
-    const t2_score = parseInt(team2.score?.split('/')?.[0]) || 0;
     if (!result.is_second_innings && t1_score > 0 && t2_score > 0) {
        result.is_second_innings = true;
-       result.target = Math.max(t1_score, t2_score) + 1;
+       // Target is the completed first innings score + 1
+       // If teamA is batting, teamB must have finished.
+       result.target = (isBattingA ? t2_score : t1_score) + 1;
     }
+
+    // Dynamic AI Prediction Heuristic (Simulated if official data missing)
+    // Base 50/50, then adjust for CRR, wickets, and remaining runs
+    let probA = 0.5;
+    if (result.is_second_innings) {
+        const target = result.target || 200;
+        const remainingRuns = target - runsVal;
+        const remainingOvers = (result.over_limit || 20) - oversFloat;
+        const rrr = remainingOvers > 0 ? (remainingRuns / remainingOvers) : 12;
+        
+        // Simple second innings model
+        probA = isBattingA ? (0.5 + (result.crr - rrr) * 0.05 - (wicketsVal * 0.04)) : (0.5 - (result.crr - rrr) * 0.05 + (wicketsVal * 0.04));
+    } else {
+        // Simple first innings model: advantage to batting team if CRR > 8, disadvantage if many wickets lost
+        const modelCRR = 8.5;
+        const crrDiff = result.crr - modelCRR;
+        const wicketImpact = wicketsVal * 0.06;
+        probA = isBattingA ? (0.55 + crrDiff * 0.03 - wicketImpact) : (0.45 - crrDiff * 0.03 + wicketImpact);
+    }
+    
+    result.win_prob_a = Math.min(0.98, Math.max(0.02, probA));
+    result.win_prob_b = 1 - result.win_prob_a;
 
 
     // Fetch Summary API for Commentary, Players, and Match Notes
@@ -211,6 +239,25 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                         type: 'wicket'
                     });
                 }
+            });
+        });
+
+        // 1c. Ball-by-ball plays (if available)
+        const plays = summaryData.plays || [];
+        (plays || []).slice(0, 10).forEach((p: any) => {
+            let type = 'normal';
+            let scoreVal = p.scoreValue || 0;
+            if (p.dismissal) type = 'wicket';
+            else if (scoreVal === 6) type = 'six';
+            else if (scoreVal === 4) type = 'four';
+            else if (scoreVal === 0) type = 'dot';
+            else if (scoreVal > 0) type = 'runs';
+
+            commentary.push({
+                over: p.over?.number || '0',
+                ball: `${p.over?.ball || '0'}: ${p.title || p.text || ''}`,
+                type: type,
+                runs: scoreVal
             });
         });
 

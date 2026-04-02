@@ -216,11 +216,22 @@ async function scrapeScores() {
 
                     // 1. Commentary (from plays + rosters)
                     const plays = summaryData.plays || [];
-                    const playEvents = plays.slice(0, 10).map(p => ({
-                        over: p.over?.number || '0',
-                        ball: p.over?.ball + ': ' + (p.title || p.text || ''),
-                        type: p.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
-                    }));
+                    const playEvents = (plays || []).slice(0, 10).map(p => {
+                        let type = 'normal';
+                        let scoreVal = p.scoreValue || 0;
+                        if (p.dismissal) type = 'wicket';
+                        else if (scoreVal === 6) type = 'six';
+                        else if (scoreVal === 4) type = 'four';
+                        else if (scoreVal === 0) type = 'dot';
+                        else if (scoreVal > 0) type = 'runs';
+
+                        return {
+                            over: p.over?.number || '0',
+                            ball: p.over?.ball + ': ' + (p.title || p.text || ''),
+                            type: type,
+                            runs: scoreVal
+                        };
+                    });
 
                     // 1b. Roster dismissals for wickets
                     const commentary = [];

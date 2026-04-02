@@ -32,11 +32,19 @@ async function resolveBetsForMatch(matchId: string, seriesId: string) {
         if (matchStates[matchId] !== ballIndex) {
             console.log(`[Resolution] Match ${matchId} Ball ${ballIndex} Outcome: ${outcome}`);
             
+            // 1. Resolve individual bets
             await supabase.rpc('resolve_predictions', {
                 p_match_id: matchId,
                 p_ball_index: ballIndex,
                 p_outcome: outcome
             });
+
+            // 2. Update global match state for current ball lock
+            await supabase.from('matches').update({
+                current_ball_index: ballIndex,
+                last_outcome: outcome
+            }).eq('id', matchId);
+
             matchStates[matchId] = ballIndex;
         }
     } catch (err: any) {
@@ -173,11 +181,22 @@ export async function GET(request: Request) {
                         });
                     });
 
-                    const playEvents = plays.slice(0, 10).map((p: any) => ({
-                        over: p.over?.number || '0',
-                        ball: p.over?.ball + ': ' + (p.title || p.text || ''),
-                        type: p.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
-                    }));
+                    const playEvents = plays.slice(0, 10).map((p: any) => {
+                        let type = 'normal';
+                        let scoreVal = p.scoreValue || 0;
+                        if (p.dismissal) type = 'wicket';
+                        else if (scoreVal === 6) type = 'six';
+                        else if (scoreVal === 4) type = 'four';
+                        else if (scoreVal === 0) type = 'dot';
+                        else if (scoreVal > 0) type = 'runs';
+
+                        return {
+                            over: p.over?.number || '0',
+                            ball: p.over?.ball + ': ' + (p.title || p.text || ''),
+                            type: type,
+                            runs: scoreVal
+                        }
+                    });
 
                     matchObj.live_commentary = [...commentary, ...playEvents].sort((a: any, b: any) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
 

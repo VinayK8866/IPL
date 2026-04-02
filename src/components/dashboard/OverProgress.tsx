@@ -54,9 +54,17 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                     label = 'INN';
                     color = '#FFD700';
                     icon = '🔄';
-                } else {
+                } else if (type === 'runs') {
+                    label = String(c.runs || '•');
+                    color = '#FFFFFF';
+                    icon = '🏏';
+                } else if (type === 'dot') {
                     label = '•';
                     color = '#4B5563';
+                    icon = '📋';
+                } else {
+                    label = '•';
+                    color = '#374151';
                     icon = '📋';
                 }
 
