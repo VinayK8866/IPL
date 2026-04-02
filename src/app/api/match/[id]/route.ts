@@ -110,6 +110,7 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         team_b: team2.team?.displayName || 'TBA',
         score: '0/0',
         overs: '0.0',
+        over_limit: event.competitions?.[0]?.overLimit || 20, // Dynamic over limit
         crr: 0,
         win_prob_a: isBattingA ? 0.55 : 0.45,
         win_prob_b: isBattingB ? 0.55 : 0.45,
@@ -138,7 +139,7 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
     const oversFloat = parseOvers(result.overs);
     const runsVal = parseInt(result.score.split('/')[0]) || 0;
     result.crr = oversFloat > 0.1 ? parseFloat((runsVal / oversFloat).toFixed(2)) : 0;
-    result.predicted_score = Math.round(result.crr * 20);
+    result.predicted_score = Math.round(result.crr * (result.over_limit || 20));
 
     // Detect Second Innings and Target from summaryText
     // Common formats: "Team Need 123 runs from 60 balls", "Team Need 123 runs"
@@ -165,6 +166,11 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
         const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 5000 });
         const summaryData = summaryRes.data;
+
+        // Update over_limit if available in summary
+        if (summaryData.event?.competitions?.[0]?.overLimit) {
+            result.over_limit = summaryData.event.competitions[0].overLimit;
+        }
 
         // === 1. LIVE COMMENTARY from notes + roster dismissals ===
         const commentary: any[] = [];
@@ -194,8 +200,10 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         const rosters = summaryData.rosters || [];
         rosters.forEach((roster: any) => {
             (roster.roster || []).forEach((player: any) => {
-                const ls = player.linescores?.[0]?.linescores?.[0];
+                // Correct path: player.linescores[0].statistics.batting.outDetails
+                const ls = player.linescores?.[0];
                 const outDetails = ls?.statistics?.batting?.outDetails;
+                
                 if (outDetails?.details?.text) {
                     commentary.push({
                         over: String(outDetails.details.over?.overs || ''),

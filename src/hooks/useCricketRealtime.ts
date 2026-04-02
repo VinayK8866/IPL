@@ -58,6 +58,7 @@ export function useCricketRealtime(matchId: string) {
       win_prob_b: matchData.win_prob_b ?? (matchData.winProbB ?? 0.5),
       is_second_innings: matchData.is_second_innings || false,
       target: matchData.target || 0,
+      over_limit: matchData.over_limit || 20,
       batters: matchData.batters || [],
       bowlers: matchData.bowlers || [],
       last_balls: matchData.last_balls || [],

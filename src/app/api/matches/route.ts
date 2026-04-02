@@ -133,6 +133,7 @@ export async function GET(request: Request) {
                     overs: team2.linescores?.[0]?.displayValue || '',
                     isBatting: team2.curatedRank?.toString() === '2'
                 },
+                over_limit: event.competitions?.[0]?.overLimit || 20,
                 winProbA: team1.curatedRank === '1' ? 0.6 : 0.4,
                 winProbB: team2.curatedRank === '1' ? 0.6 : 0.4,
                 batters: [],
@@ -147,14 +148,38 @@ export async function GET(request: Request) {
                     const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${event.id}&t=${Date.now()}`;
                     const summaryRes = await axios.get(summaryUrl, { timeout: 5000 });
                     const summaryData = summaryRes.data;
+
+                    if (summaryData.event?.competitions?.[0]?.overLimit) {
+                        matchObj.over_limit = summaryData.event.competitions[0].overLimit;
+                    }
                     
                     // 1. Commentary & Last Balls
                     const plays = summaryData.plays || [];
-                    matchObj.live_commentary = plays.slice(0, 10).map((p: any) => ({
+
+                    // Also pull from rosters for wickets
+                    const commentary: any[] = [];
+                    const rosters = summaryData.rosters || [];
+                    rosters.forEach((roster: any) => {
+                        (roster.roster || []).forEach((player: any) => {
+                            const ls = player.linescores?.[0];
+                            const outDetails = ls?.statistics?.batting?.outDetails;
+                            if (outDetails?.details?.text) {
+                                commentary.push({
+                                    over: String(outDetails.details.over?.overs || ''),
+                                    ball: `🏏 OUT! ${outDetails.details.shortText} — ${outDetails.details.text}`,
+                                    type: 'wicket'
+                                });
+                            }
+                        });
+                    });
+
+                    const playEvents = plays.slice(0, 10).map((p: any) => ({
                         over: p.over?.number || '0',
                         ball: p.over?.ball + ': ' + (p.title || p.text || ''),
                         type: p.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
                     }));
+
+                    matchObj.live_commentary = [...commentary, ...playEvents].sort((a: any, b: any) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
 
                     matchObj.last_balls = plays.slice(0, 6).map((p: any, idx: number) => {
                         const text = (p.text || '').toLowerCase();

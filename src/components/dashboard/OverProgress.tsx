@@ -122,7 +122,7 @@ export const OverProgress = ({ matchId }: { matchId: string }) => {
                                 background: `linear-gradient(90deg, #7A3FE1, ${(currentRuns / currentOvers) > 8 ? '#FF3366' : '#00F0FF'})`,
                             }}
                             initial={{ width: 0 }}
-                            animate={{ width: `${Math.min((currentOvers / 20) * 100, 100)}%` }}
+                            animate={{ width: `${Math.min((currentOvers / (score?.over_limit || 20)) * 100, 100)}%` }}
                             transition={{ duration: 0.8, ease: 'easeOut' }}
                         />
                     </div>

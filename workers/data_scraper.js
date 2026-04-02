@@ -202,19 +202,44 @@ async function scrapeScores() {
 
             // Only fetch deeper data for LIVE matches to save credits/rate-limits
             const isLive = mappedStatus === 'LIVE';
+            let overLimit = event.competitions?.[0]?.overLimit || 20;
+
             if (isLive) {
                 try {
                     const sumUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${matchId}&t=${Date.now()}`;
                     const sumRes = await axios.get(sumUrl);
                     const summaryData = sumRes.data;
 
-                    // 1. Commentary
+                    if (summaryData.event?.competitions?.[0]?.overLimit) {
+                        overLimit = summaryData.event.competitions[0].overLimit;
+                    }
+
+                    // 1. Commentary (from plays + rosters)
                     const plays = summaryData.plays || [];
-                    live_commentary = plays.slice(0, 10).map(p => ({
+                    const playEvents = plays.slice(0, 10).map(p => ({
                         over: p.over?.number || '0',
                         ball: p.over?.ball + ': ' + (p.title || p.text || ''),
                         type: p.dismissal ? 'wicket' : (p.scoreValue === 6 ? 'six' : (p.scoreValue === 4 ? 'four' : 'normal'))
                     }));
+
+                    // 1b. Roster dismissals for wickets
+                    const commentary = [];
+                    const rosters = summaryData.rosters || [];
+                    rosters.forEach((roster) => {
+                        (roster.roster || []).forEach((player) => {
+                            const ls = player.linescores?.[0];
+                            const outDetails = ls?.statistics?.batting?.outDetails;
+                            if (outDetails?.details?.text) {
+                                commentary.push({
+                                    over: String(outDetails.details.over?.overs || ''),
+                                    ball: `🏏 OUT! ${outDetails.details.shortText} — ${outDetails.details.text}`,
+                                    type: 'wicket'
+                                });
+                            }
+                        });
+                    });
+
+                    live_commentary = [...commentary, ...playEvents].sort((a, b) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
 
                     // 2. Batters & Bowlers (SITUATION DATA)
                     const situ = summaryData.situation;
@@ -278,10 +303,11 @@ async function scrapeScores() {
                     overs: teamB_overs,
                     isBatting: team2.curatedRank?.toString() === '2'
                 },
+                over_limit: overLimit,
                 winProbA: team1.curatedRank === '1' ? 0.6 : 0.4,
                 winProbB: team2.curatedRank === '1' ? 0.6 : 0.4,
                 crr: parseFloat(crr.toFixed(2)),
-                predictedScore: predictedScore
+                predictedScore: Math.round(crr * overLimit)
             };
 
             console.log(`[Scraper] Broadcasting Match: ${matchObj.name} (ID: ${matchObj.id}) CRR: ${matchObj.crr} Pred: ${matchObj.predictedScore}`);
