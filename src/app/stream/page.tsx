@@ -14,45 +14,10 @@ import { BackgroundMusic } from '@/components/stream-layout/BackgroundMusic';
 import AINarrator from '@/components/dashboard/AINarrator';
 import { useAuth } from '@/providers/AuthProvider';
 
-import { useRouter } from 'next/navigation';
+import { MatchDataProvider, useMatchData } from '@/providers/MatchDataProvider';
 
-const StreamView = () => {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { isAdmin, loading } = useAuth();
-  const [resolvedMatchId, setResolvedMatchId] = React.useState<string | null>(null);
-  
-  const queryId = searchParams.get('id');
-
-  // Logic to resolve the best match ID to display
-  useEffect(() => {
-    if (queryId) {
-      setResolvedMatchId(queryId);
-      return;
-    }
-
-    const findLiveMatch = async () => {
-      try {
-        const res = await fetch('/api/matches');
-        const data = await res.json();
-        if (data.matches && data.matches.length > 0) {
-          // Priority: LIVE matches > first available match
-          const liveMatch = data.matches.find((m: any) => m.status === 'LIVE');
-          setResolvedMatchId(liveMatch ? liveMatch.id : data.matches[0].id);
-        } else {
-          setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
-        }
-      } catch {
-        setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
-      }
-    };
-
-    findLiveMatch();
-  }, [queryId]);
-
-  const MATCH_ID = resolvedMatchId || APP_CONFIG.DEFAULT_MATCH_ID;
-
-  const { score, trigger } = useCricketRealtime(MATCH_ID);
+const StreamContent = () => {
+  const { score, trigger, matchId } = useMatchData();
   const { triggerExplosion } = useVFX();
 
   const teamA = score?.team_a || 'LSG';
@@ -71,7 +36,7 @@ const StreamView = () => {
     <main className="fixed inset-0 bg-[#0B0E14] overflow-hidden flex flex-col p-0 font-sans selection:bg-pink-500/30">
       {/* 1. Cinematic 3D Background */}
       <div className="absolute inset-0 z-0">
-        <StreamPitchMap matchId={MATCH_ID} />
+        <StreamPitchMap matchId={matchId || ''} />
       </div>
 
       <EventExplosion />
@@ -90,7 +55,7 @@ const StreamView = () => {
            </div>
            
            <div className="w-[500px] pointer-events-auto transform scale-110 origin-top-left">
-              <Scoreboard matchId={MATCH_ID} />
+              <Scoreboard matchId={matchId || ''} />
            </div>
         </div>
 
@@ -111,12 +76,12 @@ const StreamView = () => {
                Live AI Narrator Feed
             </div>
          </div>
-         <AINarrator matchId={MATCH_ID} />
+         <AINarrator matchId={matchId || ''} />
       </div>
 
       {/* 4. CHAT OVERLAY */}
       <div className="absolute bottom-32 left-10 z-30 w-96 max-h-[400px] pointer-events-auto overflow-hidden">
-         <BroadcastChat matchId={MATCH_ID} />
+         <BroadcastChat matchId={matchId || ''} />
       </div>
 
       {/* 5. BOTTOM BAR */}
@@ -152,7 +117,7 @@ const StreamView = () => {
          </div>
 
          <div className="pointer-events-auto">
-           <ScrollingTicker matchId={MATCH_ID} />
+           <ScrollingTicker matchId={matchId || ''} />
          </div>
       </footer>
 
@@ -161,10 +126,47 @@ const StreamView = () => {
   );
 };
 
+const StreamView = () => {
+  const searchParams = useSearchParams();
+  const [resolvedMatchId, setResolvedMatchId] = React.useState<string | null>(null);
+  
+  const queryId = searchParams.get('id');
+
+  useEffect(() => {
+    if (queryId) {
+      setResolvedMatchId(queryId);
+      return;
+    }
+
+    const findLiveMatch = async () => {
+      try {
+        const res = await fetch('/api/matches');
+        const data = await res.json();
+        if (data.matches && data.matches.length > 0) {
+          const liveMatch = data.matches.find((m: any) => m.status === 'LIVE');
+          setResolvedMatchId(liveMatch ? liveMatch.id : data.matches[0].id);
+        } else {
+          setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
+        }
+      } catch {
+        setResolvedMatchId(APP_CONFIG.DEFAULT_MATCH_ID);
+      }
+    };
+
+    findLiveMatch();
+  }, [queryId]);
+
+  return (
+    <MatchDataProvider matchId={resolvedMatchId}>
+       <StreamContent />
+    </MatchDataProvider>
+  );
+};
+
 export default function StreamPage() {
   return (
     <VFXProvider>
-      <Suspense fallback={<div className="fixed inset-0 bg-[#0B0E14] flex items-center justify-center text-white italic font-black">INITIALIZING BROADCAST ENGINE...</div>}>
+      <Suspense fallback={<div className="fixed inset-0 bg-[#0B0E14] flex items-center justify-center text-white italic font-black text-xl uppercase tracking-widest">INITIALIZING BROADCAST ENGINE v2.0...</div>}>
         <StreamView />
       </Suspense>
     </VFXProvider>

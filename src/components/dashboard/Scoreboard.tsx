@@ -164,9 +164,11 @@ const ActiveBowler = React.memo(({ bowler }: { bowler: any }) => (
 ));
 ActiveBowler.displayName = 'ActiveBowler';
 
+import { useMatchData } from '../../providers/MatchDataProvider';
+
 // Main Scoreboard Component (Memoized)
 export const Scoreboard = React.memo(({ matchId }: { matchId: string }) => {
-  const { score } = useCricketRealtime(matchId);
+  const { score } = useMatchData();
 
   const fallbackScore: MatchScore = {
     match_id: matchId,

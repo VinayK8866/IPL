@@ -59,8 +59,10 @@ const PitchBase = React.memo(() => (
   </group>
 ));
 
+import { useMatchData } from '@/providers/MatchDataProvider';
+
 export const StreamPitchMap = React.memo(({ matchId }: { matchId: string }) => {
-  const { score } = useCricketRealtime(matchId);
+  const { score } = useMatchData();
   const currentBalls = score?.last_balls || [];
 
   return (

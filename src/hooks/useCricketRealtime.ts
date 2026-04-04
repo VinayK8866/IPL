@@ -185,7 +185,7 @@ export function useCricketRealtime(matchId: string) {
     if (!matchId) return;
 
     let isMounted = true;
-    let pollTimer: ReturnType<typeof setTimeout>;
+    let pollTimer: ReturnType<typeof setInterval>;
 
     const fetchFromApi = async () => {
       try {
@@ -204,39 +204,28 @@ export function useCricketRealtime(matchId: string) {
     // Initial fetch immediately
     fetchFromApi();
 
-    // Poll every 10 seconds for live data (Save Vercel usage)
-    pollTimer = setInterval(fetchFromApi, 10000);
+    // Poll every 3 seconds for live data (Extreme responsiveness)
+    pollTimer = setInterval(fetchFromApi, 3000);
 
-    return () => {
-      isMounted = false;
-      clearInterval(pollTimer);
-    };
-  }, [matchId, processIncomingData]);
-
-  // ===== TIER 2: Supabase Realtime (Instant updates) =====
-  useEffect(() => {
-    if (!matchId) return;
-
-    // Unified subscription to the relay
+    // ===== TIER 2: Supabase Realtime (Heartbeat-driven instant poll) =====
+    // This listens for any change in the DB and triggers an IMMEDIATE fetch
+    // bypassing the 4s wait.
     const unsubscribe = momentumSocket.subscribe((payload: any) => {
-      let matchData = null;
-
-      if (payload.matches && Array.isArray(payload.matches)) {
-        if (payload.matches.length === 0) {
-            // Signal to re-fetch if broadcast is cleared
-            return;
-        }
-        matchData = payload.matches.find((m: any) => String(m.id) === String(matchId));
-      } else if (String(payload.match_id) === String(matchId) || String(payload.id) === String(matchId)) {
-        matchData = payload;
+      // If payload contains data, process it
+      if (payload.id === matchId || payload.match_id === matchId) {
+          processIncomingData(payload);
+          return;
       }
-
-      if (matchData) {
-        processIncomingData(matchData);
+      
+      // If it's a generic heartbeat (matches: []), trigger a fresh poll
+      if (payload.matches && Array.isArray(payload.matches) && payload.matches.length === 0) {
+          fetchFromApi();
       }
     });
 
     return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
       unsubscribe();
     };
   }, [matchId, processIncomingData]);

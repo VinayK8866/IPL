@@ -13,8 +13,10 @@ interface TickerItem {
   text: string;
 }
 
+import { useMatchData } from '@/providers/MatchDataProvider';
+
 export const ScrollingTicker = React.memo(({ matchId }: { matchId: string }) => {
-  const { score } = useCricketRealtime(matchId || APP_CONFIG.DEFAULT_MATCH_ID);
+  const { score } = useMatchData();
   
   const scrollingItems = useMemo(() => {
     if (score) {

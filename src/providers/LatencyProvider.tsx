@@ -18,8 +18,8 @@ const LatencyStateContext = createContext<LatencyStateContextType | undefined>(u
 const LatencyRefContext = createContext<(() => number) | undefined>(undefined);
 
 export const LatencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [offset, setOffsetState] = useState<number>(2);
-  const offsetRef = useRef<number>(2);
+  const [offset, setOffsetState] = useState<number>(0.5);
+  const offsetRef = useRef<number>(0.5);
 
   useEffect(() => {
     const saved = localStorage.getItem('match_delay_offset');

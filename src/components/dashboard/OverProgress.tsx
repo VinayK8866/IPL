@@ -19,8 +19,10 @@ interface OverEvent {
     over: string;
 }
 
+import { useMatchData } from '@/providers/MatchDataProvider';
+
 export const OverProgress = ({ matchId }: { matchId: string }) => {
-    const { score } = useCricketRealtime(matchId);
+    const { score } = useMatchData();
 
     const events: OverEvent[] = useMemo(() => {
         if (!score?.live_commentary || score.live_commentary.length === 0) return [];

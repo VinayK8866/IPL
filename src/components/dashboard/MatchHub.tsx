@@ -23,10 +23,11 @@ import { OverProgress } from '@/components/dashboard/OverProgress';
 import { EventAudio } from '@/components/dashboard/EventAudio';
 import { useLatencyRef } from '@/providers/LatencyProvider';
 import { AdminControls } from '@/components/dashboard/AdminControls';
+import { MatchDataProvider, useMatchData } from '@/providers/MatchDataProvider';
 
-export const MatchHub = () => {
+export const MatchHubInner = () => {
     const { id } = useParams<{ id: string }>();
-    const { score, trigger } = useCricketRealtime(id as string);
+    const { score, trigger } = useMatchData();
     const { triggerExplosion } = useVFX();
     const getOffset = useLatencyRef();
   
@@ -156,5 +157,14 @@ export const MatchHub = () => {
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         `}</style>
       </div>
+    );
+};
+
+export const MatchHub = () => {
+    const { id } = useParams<{ id: string }>();
+    return (
+        <MatchDataProvider matchId={id as string}>
+            <MatchHubInner />
+        </MatchDataProvider>
     );
 };

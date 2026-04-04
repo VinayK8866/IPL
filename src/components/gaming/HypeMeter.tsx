@@ -19,12 +19,14 @@ interface HypeMeterProps {
   teamB?: { name: string; color: string };
 }
 
+import { useMatchData } from '@/providers/MatchDataProvider';
+
 export const HypeMeter = React.memo(({ 
   matchId, 
   teamA: propTeamA, 
   teamB: propTeamB 
 }: HypeMeterProps) => {
-  const { hype, score } = useCricketRealtime(matchId);
+  const { hype, score } = useMatchData();
   
   // Resolve team names and colors: Props > Live Data > Defaults
   const teamA = useMemo(() => ({

@@ -12,52 +12,12 @@ interface Commentary {
   type: string
 }
 
+import { useMatchData } from '@/providers/MatchDataProvider'
+
 export default function AINarrator({ matchId }: { matchId: string }) {
-  const { score } = useCricketRealtime(matchId)
-  const [commentary, setCommentary] = useState<Commentary[]>([])
-  const [loading, setLoading] = useState(true)
-
-  // Fetch commentary from the serverless API (works on Vercel)
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchCommentary = async () => {
-      try {
-        const res = await fetch(`/api/match/${matchId}`);
-        if (!res.ok) {
-          setLoading(false);
-          return;
-        }
-        const data = await res.json();
-        if (!isMounted) return;
-
-        if (data.live_commentary && data.live_commentary.length > 0) {
-          setCommentary(data.live_commentary as Commentary[]);
-        }
-      } catch (err) {
-        console.warn('[AINarrator] API fetch failed:', err);
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-
-    fetchCommentary();
-
-    // Poll every 10s for updated commentary
-    const interval = setInterval(fetchCommentary, 10000);
-
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, [matchId])
-
-  // Also sync commentary from the realtime hook when available
-  useEffect(() => {
-    if (score?.live_commentary && score.live_commentary.length > 0) {
-      setCommentary(score.live_commentary as Commentary[]);
-    }
-  }, [score?.live_commentary])
+  const { score } = useMatchData()
+  const commentary = (score?.live_commentary || []) as Commentary[]
+  const loading = !score
 
   if (loading) return <div className="animate-pulse bg-[#05070A] h-full w-full border border-white/5" />
 
