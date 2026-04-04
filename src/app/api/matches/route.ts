@@ -121,6 +121,32 @@ export async function GET(request: Request) {
             // If filtering by ID, skip others
             if (matchIdParam && uniqueId !== matchIdParam && event.id !== matchIdParam) continue;
 
+            // Detect batting team from linescores
+            const t1_isBatting = team1.linescores?.[0]?.isBatting === true;
+            const t2_isBatting = team2.linescores?.[0]?.isBatting === true;
+
+            // Parse clean score from compound strings like "162/6 (20 ov)"
+            const parseCleanScore = (s: string) => {
+                if (!s) return '';
+                const m = s.match(/^(\d+\/\d+)/);
+                return m ? m[1] : s.split(' ')[0];
+            };
+
+            // Get overs from linescores.overs field (NOT displayValue)
+            const t1_overs = String(team1.linescores?.[0]?.overs || '');
+            const t2_overs = String(team2.linescores?.[0]?.overs || '');
+
+            // Also try to extract overs from the score string like "162/6 (20 ov)"
+            const extractOversFromScore = (scoreStr: string) => {
+                const m = scoreStr.match(/\((\d+\.?\d*)\//);
+                if (m) return m[1];
+                const m2 = scoreStr.match(/\((\d+\.?\d*)\s*ov/);
+                return m2 ? m2[1] : '';
+            };
+
+            const t1_oversFromScore = extractOversFromScore(team1.score || '');
+            const t2_oversFromScore = extractOversFromScore(team2.score || '');
+
             let matchObj: any = {
                 id: uniqueId,
                 originalId: event.id,
@@ -132,18 +158,18 @@ export async function GET(request: Request) {
                 teamA: {
                     name: team1.team?.displayName || team1.team?.shortDisplayName || 'TBA',
                     score: team1.score || '',
-                    overs: team1.linescores?.[0]?.displayValue || '',
-                    isBatting: team1.curatedRank?.toString() === '1'
+                    overs: t1_oversFromScore || t1_overs,
+                    isBatting: t1_isBatting
                 },
                 teamB: {
                     name: team2.team?.displayName || team2.team?.shortDisplayName || 'TBA',
                     score: team2.score || '',
-                    overs: team2.linescores?.[0]?.displayValue || '',
-                    isBatting: team2.curatedRank?.toString() === '2'
+                    overs: t2_oversFromScore || t2_overs,
+                    isBatting: t2_isBatting
                 },
                 over_limit: event.competitions?.[0]?.overLimit || 20,
-                winProbA: team1.curatedRank === '1' ? 0.6 : 0.4,
-                winProbB: team2.curatedRank === '1' ? 0.6 : 0.4,
+                winProbA: 0.5,
+                winProbB: 0.5,
                 batters: [],
                 bowlers: [],
                 last_balls: [],
@@ -161,12 +187,31 @@ export async function GET(request: Request) {
                         matchObj.over_limit = summaryData.event.competitions[0].overLimit;
                     }
                     
-                    // 1. Commentary & Last Balls
-                    const plays = summaryData.plays || [];
-
-                    // Also pull from rosters for wickets
+                    // 1. Commentary from multiple sources
                     const commentary: any[] = [];
                     const rosters = summaryData.rosters || [];
+
+                    // 1a. Match Notes (milestones, strategic timeouts, reviews, powerplays)
+                    const notes = summaryData.notes || [];
+                    const matchNotes = notes.filter((n: any) => n.type === 'matchnote');
+                    matchNotes.reverse().forEach((note: any) => {
+                        const text = note.text || '';
+                        let type = 'normal';
+                        if (text.toLowerCase().includes('wicket') || text.toLowerCase().includes('review')) type = 'wicket';
+                        else if (text.toLowerCase().includes('50 runs') || text.toLowerCase().includes('100 runs') || text.toLowerCase().includes('150 runs')) type = 'milestone';
+                        else if (text.toLowerCase().includes('innings break')) type = 'innings_break';
+                        else if (text.toLowerCase().includes('powerplay')) type = 'powerplay';
+                        else if (text.toLowerCase().includes('strategic timeout')) type = 'timeout';
+
+                        const overMatch = text.match(/(\d+\.?\d*)\s*ov/i);
+                        commentary.push({
+                            over: overMatch ? overMatch[1] : (note.section || ''),
+                            ball: text,
+                            type
+                        });
+                    });
+
+                    // 1b. Roster dismissals (detailed wicket text)
                     rosters.forEach((roster: any) => {
                         (roster.roster || []).forEach((player: any) => {
                             const ls = player.linescores?.[0];
@@ -181,101 +226,130 @@ export async function GET(request: Request) {
                         });
                     });
 
-                    const playEvents = plays.slice(0, 10).map((p: any) => {
-                        let type = 'normal';
-                        let scoreVal = p.scoreValue || 0;
-                        if (p.dismissal) type = 'wicket';
-                        else if (scoreVal === 6) type = 'six';
-                        else if (scoreVal === 4) type = 'four';
-                        else if (scoreVal === 0) type = 'dot';
-                        else if (scoreVal > 0) type = 'runs';
-
-                        return {
-                            over: p.over?.number || '0',
-                            ball: p.over?.ball + ': ' + (p.title || p.text || ''),
-                            type: type,
-                            runs: scoreVal
-                        }
-                    });
-
-                    matchObj.live_commentary = [...commentary, ...playEvents].sort((a: any, b: any) => parseFloat(b.over) - parseFloat(a.over)).slice(0, 15);
-
-                    matchObj.last_balls = plays.slice(0, 6).map((p: any, idx: number) => {
-                        const text = (p.text || '').toLowerCase();
-                        let x = 0.5; // Middle
-                        let y = 0.6; // Good length
-                        
-                        // JUGAAD: Parse commentary for real-derived coordinates
-                        if (text.includes('outside off') || text.includes('width')) x = 0.8;
-                        else if (text.includes('leg stump') || text.includes('pads') || text.includes('down leg')) x = 0.2;
-                        
-                        if (text.includes('short') || text.includes('bounced')) y = 0.3;
-                        else if (text.includes('full') || text.includes('half volley')) y = 0.8;
-                        else if (text.includes('yorker')) y = 1.0;
-                        
-                        // Wagon Wheel Angle (stored in z for delivery map, or we can use another field)
-                        let angle = 0;
-                        if (text.includes('cover') || text.includes('point')) angle = 135;
-                        else if (text.includes('mid-off') || text.includes('long-off')) angle = 180;
-                        else if (text.includes('mid-on') || text.includes('long-on')) angle = 0;
-                        else if (text.includes('mid-wicket') || text.includes('square leg')) angle = 45;
-                        else if (text.includes('fine leg')) angle = 20;
-
-                        return {
-                            x, 
-                            y, 
-                            z: angle, // Using z to pass angle to WagonWheel for now
-                            type: p.scoreValue >= 4 ? 'pace' : 'spin',
-                            is_wicket: !!p.dismissal,
-                            timestamp: new Date(Date.now() - idx * 60000).toISOString()
-                        };
-                    });
-
-                    // 2. Active Batters/Bowlers from Situation
-                    const situ = summaryData.situation;
-                    if (situ) {
-                        const b1 = situ.batter1 ? { 
-                            name: situ.batter1.athlete?.displayName || 'Batter 1', 
-                            runs: situ.batter1.runs || 0, 
-                            balls: situ.batter1.balls || 0, 
-                            fours: 0, sixes: 0, 
-                            strikeRate: (situ.batter1.runs / (situ.batter1.balls || 1)) * 100,
-                            isBatting: true 
-                        } : null;
-                        const b2 = situ.batter2 ? { 
-                            name: situ.batter2.athlete?.displayName || 'Batter 2', 
-                            runs: situ.batter2.runs || 0, 
-                            balls: situ.batter2.balls || 0, 
-                            fours: 0, sixes: 0, 
-                            strikeRate: (situ.batter2.runs / (situ.batter2.balls || 1)) * 100,
-                            isBatting: false 
-                        } : null;
-                        
-                        matchObj.batters = [b1, b2].filter(Boolean);
-                        
-                        if (situ.bowler1) {
-                            matchObj.bowlers = [{
-                                name: situ.bowler1.athlete?.displayName || 'Bowler',
-                                overs: situ.bowler1.overs || 0,
-                                maidens: 0,
-                                runs: situ.bowler1.conceded || 0,
-                                wickets: situ.bowler1.wickets || 0,
-                                economy: (situ.bowler1.conceded / (situ.bowler1.overs || 1)) || 0
-                            }];
-                        }
+                    // 1c. Ball-by-ball from hs-consumer-api (may fail with 403)
+                    try {
+                        const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${event.id}&sortDirection=DESC`;
+                        const commentaryV1Res = await axios.get(commentaryV1Url, { timeout: 3000 });
+                        const comments = commentaryV1Res.data?.comments || [];
+                        comments.slice(0, 15).forEach((c: any) => {
+                            let type = 'normal';
+                            const runs = c.runs || 0;
+                            if (c.isWicket) type = 'wicket';
+                            else if (c.isFour) type = 'four';
+                            else if (c.isSix) type = 'six';
+                            else if (runs === 0) type = 'dot';
+                            else if (runs > 0) type = 'runs';
+                            commentary.push({
+                                over: String(c.overActual || c.overNumber || '0'),
+                                ball: c.title || c.commentaryText?.substring(0, 100) || '',
+                                type, runs
+                            });
+                        });
+                    } catch {
+                        // Consumer commentary API may be blocked — fallback to plays
+                        const plays = summaryData.plays || [];
+                        (plays).slice(0, 10).forEach((p: any) => {
+                            let type = 'normal';
+                            let scoreVal = p.scoreValue || 0;
+                            if (p.dismissal) type = 'wicket';
+                            else if (scoreVal === 6) type = 'six';
+                            else if (scoreVal === 4) type = 'four';
+                            else if (scoreVal === 0) type = 'dot';
+                            else if (scoreVal > 0) type = 'runs';
+                            commentary.push({
+                                over: p.over?.number || '0',
+                                ball: (p.title || p.text || ''),
+                                type, runs: scoreVal
+                            });
+                        });
                     }
-                    
-                    // CRR & Prediction
-                    const t1_score_str = team1.score?.split('/')[0] || '0';
-                    const t2_score_str = team2.score?.split('/')[0] || '0';
-                    const t1_score = parseInt(t1_score_str) || 0;
-                    const t2_score = parseInt(t2_score_str) || 0;
-                    const ovStr = (team1.linescores?.[0]?.displayValue || team2.linescores?.[0]?.displayValue || '0.1').toString();
-                    const parts = ovStr.split('.');
-                    const totalBalls = (parseInt(parts[0]) * 6) + (parseInt(parts[1] || '0'));
-                    const crrValue = (Math.max(t1_score, t2_score) / (Math.max(1, totalBalls) / 6)) || 0;
+
+                    // Sort by over descending and deduplicate
+                    matchObj.live_commentary = commentary
+                        .sort((a: any, b: any) => parseFloat(b.over || '0') - parseFloat(a.over || '0'))
+                        .slice(0, 20);
+
+                    matchObj.last_balls = commentary.filter((c: any) => c.runs !== undefined).slice(0, 6).map((c: any, idx: number) => ({
+                        runs: c.type === 'four' ? 4 : (c.type === 'six' ? 6 : (c.runs || 0)),
+                        outcome: c.type
+                    }));
+
+                    // 2. Active Batters from Rosters (situation.batter1/batter2 is often null)
+                    const battingTeamId = t1_isBatting ? team1.team?.id : (t2_isBatting ? team2.team?.id : null);
+                    const bowlingTeamId = t1_isBatting ? team2.team?.id : (t2_isBatting ? team1.team?.id : null);
+
+                    // Find active batters from roster (batted=1, dismissal=0)
+                    rosters.forEach((roster: any) => {
+                        if (String(roster.team?.id) !== String(battingTeamId)) return;
+                        (roster.roster || []).forEach((player: any) => {
+                            const innerLs = player.linescores?.[0]?.linescores?.[0];
+                            if (!innerLs) return;
+                            const stats = innerLs.statistics?.categories?.[0]?.stats;
+                            if (!stats) return;
+                            const getStat = (name: string) => {
+                                const s = stats.find((st: any) => st.name === name);
+                                return s ? Number(s.value) : 0;
+                            };
+                            if (getStat('batted') === 1 && getStat('dismissal') === 0) {
+                                matchObj.batters.push({
+                                    name: player.athlete?.displayName || 'Unknown',
+                                    runs: getStat('runs'),
+                                    balls: getStat('ballsFaced'),
+                                    fours: getStat('fours'),
+                                    sixes: getStat('sixes'),
+                                    strikeRate: getStat('strikeRate')
+                                });
+                            }
+                        });
+                    });
+                    matchObj.batters = matchObj.batters.slice(0, 2);
+
+                    // Find current bowlers from bowling team roster
+                    rosters.forEach((roster: any) => {
+                        if (String(roster.team?.id) !== String(bowlingTeamId)) return;
+                        (roster.roster || []).forEach((player: any) => {
+                            const innerLs = player.linescores?.[0]?.linescores?.[0];
+                            if (!innerLs) return;
+                            const stats = innerLs.statistics?.categories?.[0]?.stats;
+                            if (!stats) return;
+                            const getStat = (name: string) => {
+                                const s = stats.find((st: any) => st.name === name);
+                                return s ? Number(s.value) : 0;
+                            };
+                            const overs = getStat('overs');
+                            if (overs > 0) {
+                                matchObj.bowlers.push({
+                                    name: player.athlete?.displayName || 'Unknown',
+                                    overs,
+                                    runs: getStat('conceded'),
+                                    wickets: getStat('wickets'),
+                                    economy: getStat('economyRate') || parseFloat((getStat('conceded') / overs).toFixed(2))
+                                });
+                            }
+                        });
+                    });
+                    // Sort by most overs, keep the most active bowler
+                    matchObj.bowlers.sort((a: any, b: any) => b.overs - a.overs);
+                    if (matchObj.bowlers.length > 1) {
+                        matchObj.bowlers = [matchObj.bowlers[0]];
+                    }
+
+                    // 3. CRR & Prediction — FIXED: use batting score and overs properly
+                    const battingTeamComp = t1_isBatting ? team1 : (t2_isBatting ? team2 : team1);
+                    const battingScoreStr = battingTeamComp.score || '0';
+                    const battingRuns = parseInt(battingScoreStr.match(/^(\d+)/)?.[1] || '0') || 0;
+                    const battingOversStr = t1_isBatting ? (t1_oversFromScore || t1_overs) : (t2_oversFromScore || t2_overs);
+                    const parseOversToFloat = (ovStr: string) => {
+                        if (!ovStr) return 0;
+                        const p = ovStr.toString().split('.');
+                        return ((parseInt(p[0]) || 0) * 6 + (parseInt(p[1] || '0') || 0)) / 6;
+                    };
+                    const oversFloat = parseOversToFloat(battingOversStr);
+                    const crrValue = oversFloat > 0.1 ? battingRuns / oversFloat : 0;
+                    const overLimit = matchObj.over_limit || 20;
+                    const remainingOvers = Math.max(0, overLimit - oversFloat);
                     matchObj.crr = parseFloat(crrValue.toFixed(2));
-                    matchObj.predictedScore = Math.round(crrValue * 20);
+                    matchObj.predictedScore = Math.max(battingRuns, battingRuns + Math.round(crrValue * remainingOvers));
 
                 } catch (e) {
                     console.warn(`[API Extended] Failed for ${event.id}`);
