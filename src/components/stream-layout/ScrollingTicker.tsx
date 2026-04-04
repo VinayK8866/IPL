@@ -19,7 +19,7 @@ export const ScrollingTicker = React.memo(({ matchId }: { matchId: string }) => 
   const scrollingItems = useMemo(() => {
     if (score) {
       return [
-        { id: 's1', type: 'UPDATE' as const, text: `PULSE DATA ENGINE: ${score.status?.toUpperCase()} | CRR: ${score.crr || '0.0'} | SYNC ACTIVE` },
+        { id: 's1', type: 'UPDATE' as const, text: `PULSE DATA ENGINE: ${(score.status_text || 'LIVE').toUpperCase()} | CRR: ${score.crr || '0.0'} | SYNC ACTIVE` },
         { id: 's2', type: 'TACTICAL' as const, text: `GEMINI AI: TARGET PREDICTION ~${score.predicted_score || '0'} | MOMENTUM: ${score.win_prob_a > 0.5 ? 'STRONG' : 'STABLE'}` },
         { id: 's3', type: 'UPDATE' as const, text: `${score.team_a} vs ${score.team_b} | ${score.status_text || 'LIVE BROADCAST'}` },
         { id: 's4', type: 'TACTICAL' as const, text: `CYBER FEED: HIGH-SENTIMENT PEAK DETECTED | ANALYZING VOLATILITY...` }
