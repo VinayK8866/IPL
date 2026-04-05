@@ -53,4 +53,14 @@
       display: none;
     }
   }
+
+  .animate-fire-rise {
+    animation: fire-rise 1.2s infinite ease-out;
+  }
+
+  @keyframes fire-rise {
+    0% { transform: translateY(10%) skewX(-5deg) scaleY(1); opacity: 0.3; }
+    50% { transform: translateY(0%) skewX(5deg) scaleY(1.2); opacity: 0.6; }
+    100% { transform: translateY(10%) skewX(-5deg) scaleY(1); opacity: 0.3; }
+  }
 }

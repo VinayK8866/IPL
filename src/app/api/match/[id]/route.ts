@@ -256,7 +256,8 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 commentary.push({
                     over: overVal,
                     ball: text,
-                    type
+                    type,
+                    isPlay: false
                 });
             }
         });
@@ -273,7 +274,8 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                     commentary.push({
                         over: String(outDetails.details.over?.overs || ''),
                         ball: `🏏 OUT! ${outDetails.details.shortText} — ${outDetails.details.text}`,
-                        type: 'wicket'
+                        type: 'wicket',
+                        isPlay: false
                     });
                 }
             });
@@ -299,7 +301,8 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                         over: String(c.overActual || c.overNumber || '0'),
                         ball: c.title || c.commentaryText?.substring(0, 100) || '',
                         type: type,
-                        runs: runs
+                        runs: runs,
+                        isPlay: true
                     });
                 });
             } else {
@@ -318,7 +321,8 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                         over: p.over?.number || '0',
                         ball: `${p.over?.ball || '0'}: ${p.title || p.text || ''}`,
                         type: type,
-                        runs: scoreVal
+                        runs: scoreVal,
+                        isPlay: true
                     });
                 });
             }
@@ -343,13 +347,14 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         result.live_commentary = commentary.slice(0, 20);
 
         // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
-        // Look for actual ball plays in the commentary to fill the neon timeline
-        const ballPlays = commentary.filter(c => ['dot', 'runs', 'four', 'six', 'wicket'].includes(c.type));
-        result.last_balls = ballPlays.slice(0, 12).map(c => ({
-            value: c.runs === 0 ? '0' : (c.type === 'wicket' ? 'W' : String(c.runs || '0')),
+        // We only want ACTUAL ball-by-ball outcomes, not summaries/notes.
+        const ballPlays = (result.live_commentary || []).filter((c: any) => c.isPlay === true);
+        result.last_balls = ballPlays.slice(0, 12).map((c: any) => ({
+            value: c.type === 'wicket' ? 'W' : (c.runs === 0 ? '0' : String(c.runs || '0')),
             is_wicket: c.type === 'wicket',
-            timestamp: new Date().toISOString() // Placeholder or use c.timestamp if available
-        })).reverse(); // Reverse to show chronological order (oldest to newest)
+            timestamp: new Date().toISOString(),
+            over: c.over
+        })).reverse();
 
         // === 2. PLAYER STATS: Try situation first, fall back to rosters ===
         const situ = summaryData.situation;
