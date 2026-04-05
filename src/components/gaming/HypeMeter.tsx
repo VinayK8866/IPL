@@ -5,6 +5,7 @@ import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion'
 import { useCricketRealtime } from '../../hooks/useCricketRealtime';
 import { supabase } from '../../lib/supabaseClient';
 import { HypeBurst } from '../dashboard/HypeBurst';
+import { useVFX } from '../dashboard/vfx/VFXProvider';
 
 /**
  * PROJECT CRICKET PULSE - GLOBAL HYPE METER
@@ -57,12 +58,17 @@ export const HypeMeter = React.memo(({
     percentageA.set(calcPercentA);
   }, [calcPercentA, percentageA]);
 
+  const { triggerShake } = useVFX();
+
   const handleBoost = useCallback(async (team: 'a' | 'b') => {
     // 1. Optimistic Update
     if (team === 'a') setLocalClicksA(prev => prev + 1);
     else setLocalClicksB(prev => prev + 1);
 
-    // 2. High-frequency atomic increment via RPC
+    // 2. Visual Punch
+    triggerShake(0.5, 200);
+
+    // 3. High-frequency atomic increment via RPC
     const { error } = await supabase.rpc('increment_match_hype', {
       p_match_id: matchId,
       p_team: team === 'a' ? 'team_a' : 'team_b'
@@ -70,12 +76,11 @@ export const HypeMeter = React.memo(({
 
     if (error) {
       console.error('Hype Sync Error:', error);
-      // Rollback on severe failure (Optional)
     }
-  }, [matchId]);
+  }, [matchId, triggerShake]);
 
   return (
-    <div className="w-full flex flex-col gap-4 p-8 bg-[#0B0E14] border-l-4 border-[#7A3FE1] shadow-2xl skew-x-[-2deg] select-none">
+    <div className="w-full flex flex-col gap-4 p-8 bg-[#0B0E14] border-l-4 border-[#7A3FE1] shadow-2xl skew-x-[-2deg] select-none relative overflow-hidden">
       
       {/* Header Stat Display */}
       <div className="flex justify-between items-baseline mb-2">
@@ -101,19 +106,17 @@ export const HypeMeter = React.memo(({
       </div>
 
       {/* Main Bar Visualization */}
-      <div className="h-12 w-full bg-[#1A1F29]/50 relative overflow-hidden flex transform skew-x-[-15deg]">
+      <div className="h-12 w-full bg-[#1A1F29]/50 relative overflow-hidden flex transform skew-x-[-15deg] border border-white/5">
         <motion.div 
           className="h-full relative overflow-hidden" 
           style={{ 
             width: useTransform(percentageA, (v) => `${v}%`),
             backgroundColor: teamA.color,
-            boxShadow: `0 0 30px ${teamA.color}44`
+            boxShadow: `inset 0 0 20px ${teamA.color}88`
           }}
         >
-           {/* Animated Gradient Pulse (GLSL Style) */}
            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-           
-           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-black font-black italic text-xs tracking-tighter mix-blend-overlay">
+           <span className="absolute right-4 top-1/2 -translate-y-1/2 text-black font-black italic text-[10px] tracking-tighter mix-blend-overlay uppercase">
               {teamA.name}
            </span>
         </motion.div>
@@ -122,41 +125,39 @@ export const HypeMeter = React.memo(({
           className="h-full flex-1 relative overflow-hidden" 
           style={{ 
             backgroundColor: teamB.color,
-            boxShadow: `0 0 30px ${teamB.color}44`
+            boxShadow: `inset 0 0 20px ${teamB.color}88`
           }}
         >
            <div className="absolute inset-0 bg-gradient-to-l from-transparent via-white/10 to-transparent animate-pulse" />
-
-           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-black italic text-xs tracking-tighter mix-blend-overlay">
+           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-black italic text-[10px] tracking-tighter mix-blend-overlay uppercase">
               {teamB.name}
            </span>
         </motion.div>
 
-        {/* Dynamic Center Lock Flash */}
         <motion.div 
-           className="absolute top-0 bottom-0 w-1 bg-white z-10 shadow-[0_0_20px_white]" 
-           style={{ left: useTransform(percentageA, (v) => `${v}%`) }}
+          className="absolute top-0 bottom-0 w-1 bg-white z-10 shadow-[0_0_20px_white]" 
+          style={{ left: useTransform(percentageA, (v) => `${v}%`) }}
         />
       </div>
 
       {/* Boost Action Buttons */}
       <div className="grid grid-cols-2 gap-4 mt-2">
         <motion.button
-          whileHover={{ scale: 1.02, x: 2 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => handleBoost('a')}
-          className="py-3 font-black italic text-xs uppercase tracking-[0.2em] skew-x-[-15deg] transition-all
-            bg-transparent border border-[#FFD700]/50 hover:bg-[#FFD700] hover:text-black text-[#FFD700]"
+          className="py-4 font-black italic text-[11px] uppercase tracking-[0.2em] skew-x-[-15deg] transition-all
+            bg-transparent border-2 border-[#FFD700] hover:bg-[#FFD700] hover:text-black text-[#FFD700] shadow-[0_0_20px_rgba(255,215,0,0.1)]"
         >
           Boost {teamA.name}
         </motion.button>
         
         <motion.button
-          whileHover={{ scale: 1.02, x: -2 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.05, y: -2 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => handleBoost('b')}
-          className="py-3 font-black italic text-xs uppercase tracking-[0.2em] skew-x-[-15deg] transition-all
-            bg-transparent border border-[#7A3FE1]/50 hover:bg-[#7A3FE1] hover:text-white text-[#7A3FE1]"
+          className="py-4 font-black italic text-[11px] uppercase tracking-[0.2em] skew-x-[-15deg] transition-all
+            bg-transparent border-2 border-[#7A3FE1] hover:bg-[#7A3FE1] hover:text-white text-[#7A3FE1] shadow-[0_0_20px_rgba(122,63,225,0.1)]"
         >
           Boost {teamB.name}
         </motion.button>

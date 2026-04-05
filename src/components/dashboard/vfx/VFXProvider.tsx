@@ -19,7 +19,11 @@ interface VFXContextType {
     uGlobalHype: { value: number };
   };
   triggerExplosion: (type: 'four' | 'six' | 'wicket', teamColor: string, eventTime?: number) => void;
+  triggerShake: (intensity?: number, duration?: number) => void;
+  setAura: (color: string | null) => void;
   activeExplosion: { type: 'four' | 'six' | 'wicket'; teamColor: string; id: number } | null;
+  shakeActive: boolean;
+  aura: string | null;
 }
 
 const VFXContext = createContext<VFXContextType | undefined>(undefined);
@@ -27,6 +31,8 @@ const VFXContext = createContext<VFXContextType | undefined>(undefined);
 export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { syncDelay } = useLatencySync();
   const [activeExplosion, setActiveExplosion] = useState<{ type: 'four' | 'six' | 'wicket'; teamColor: string; id: number } | null>(null);
+  const [shakeActive, setShakeActive] = useState(false);
+  const [aura, setAura] = useState<string | null>(null);
 
   // Global uniforms to be shared across all shader materials
   const uniforms = useMemo(() => ({
@@ -60,8 +66,21 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, eventTime);
   };
 
+  const triggerShake = (intensity = 1, duration = 500) => {
+    setShakeActive(true);
+    setTimeout(() => setShakeActive(false), duration);
+  };
+
   return (
-    <VFXContext.Provider value={{ uniforms, triggerExplosion, activeExplosion }}>
+    <VFXContext.Provider value={{ 
+      uniforms, 
+      triggerExplosion, 
+      triggerShake, 
+      setAura, 
+      activeExplosion, 
+      shakeActive, 
+      aura 
+    }}>
       {children}
     </VFXContext.Provider>
   );

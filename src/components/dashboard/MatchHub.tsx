@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { ChevronLeft, Zap } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import Scoreboard from '@/components/dashboard/Scoreboard';
 import PitchMap3D from '@/components/dashboard/PitchMap3D';
 import MomentumHeatmap from '@/components/dashboard/MomentumHeatmap';
@@ -28,7 +29,7 @@ import { MatchDataProvider, useMatchData } from '@/providers/MatchDataProvider';
 export const MatchHubInner = () => {
     const { id } = useParams<{ id: string }>();
     const { score, trigger } = useMatchData();
-    const { triggerExplosion } = useVFX();
+    const { triggerExplosion, triggerShake, setAura, shakeActive, aura } = useVFX();
     const getOffset = useLatencyRef();
   
     const teamAHype = Math.round((score?.win_prob_a || 0.5) * 100);
@@ -36,13 +37,54 @@ export const MatchHubInner = () => {
   
     // Global VFX Triggers
     useEffect(() => {
-      if (trigger === 'BOUNDARY_FOUR') triggerExplosion('four', teamAHype > teamBHype ? '#7A3FE1' : '#FF3366');
-      if (trigger === 'BOUNDARY_SIX') triggerExplosion('six', teamAHype > teamBHype ? '#7A3FE1' : '#FF3366');
-      if (trigger === 'WICKET') triggerExplosion('wicket', '#FF3366');
-    }, [trigger, teamAHype, teamBHype, triggerExplosion]);
+      const teamAColor = '#7A3FE1';
+      const teamBColor = '#FFD700'; // CSK Gold
+      const actingTeamColor = teamAHype > teamBHype ? teamAColor : teamBColor;
+
+      if (trigger === 'BOUNDARY_FOUR') {
+        triggerExplosion('four', actingTeamColor);
+        triggerShake(1, 400);
+        setAura(actingTeamColor);
+        setTimeout(() => setAura(null), 3000);
+      }
+      if (trigger === 'BOUNDARY_SIX') {
+        triggerExplosion('six', actingTeamColor);
+        triggerShake(2, 600);
+        setAura(actingTeamColor);
+        setTimeout(() => setAura(null), 4000);
+      }
+      if (trigger === 'WICKET') {
+        triggerExplosion('wicket', '#FF3366');
+        triggerShake(3, 800);
+        setAura('#FF3366');
+        setTimeout(() => setAura(null), 5000);
+      }
+    }, [trigger, teamAHype, teamBHype, triggerExplosion, triggerShake, setAura]);
   
     return (
-      <div className="flex flex-col min-h-screen bg-[#0B0E14] text-white selection:bg-[#FF3366]/30 relative">
+      <motion.div 
+        animate={shakeActive ? {
+          x: [0, -10, 10, -10, 10, 0],
+          y: [0, 5, -5, 5, -5, 0],
+          transition: { duration: 0.4 }
+        } : {}}
+        className="flex flex-col min-h-screen bg-[#0B0E14] text-white selection:bg-[#FF3366]/30 relative overflow-hidden"
+      >
+        {/* Milestone Aura Overlay */}
+        <AnimatePresence>
+          {aura && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.15 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 pointer-events-none z-0"
+              style={{ 
+                background: `radial-gradient(circle at center, ${aura} 0%, transparent 70%)`,
+                boxShadow: `inset 0 0 100px ${aura}`
+              }}
+            />
+          )}
+        </AnimatePresence>
         <EventExplosion />
         <EventAudio matchId={id as string} />
         
