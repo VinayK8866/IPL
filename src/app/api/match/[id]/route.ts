@@ -342,6 +342,15 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
 
         result.live_commentary = commentary.slice(0, 20);
 
+        // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
+        // Look for actual ball plays in the commentary to fill the neon timeline
+        const ballPlays = commentary.filter(c => ['dot', 'runs', 'four', 'six', 'wicket'].includes(c.type));
+        result.last_balls = ballPlays.slice(0, 12).map(c => ({
+            value: c.runs === 0 ? '0' : (c.type === 'wicket' ? 'W' : String(c.runs || '0')),
+            is_wicket: c.type === 'wicket',
+            timestamp: new Date().toISOString() // Placeholder or use c.timestamp if available
+        })).reverse(); // Reverse to show chronological order (oldest to newest)
+
         // === 2. PLAYER STATS: Try situation first, fall back to rosters ===
         const situ = summaryData.situation;
         const battingTeamIdForRoster = isBattingA ? team1.team?.id : (isBattingB ? team2.team?.id : null);
@@ -369,27 +378,33 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             });
         }
 
-        // Fallback: Extract active batters from roster stats (batted=1, dismissal=0)
+        // Fallback: Extract active batters from ANY team roster if designated batting team has players with batted=1, dismissal=0
         if (result.batters.length === 0) {
             rosters.forEach((roster: any) => {
-                if (String(roster.team?.id) !== String(battingTeamIdForRoster)) return;
                 (roster.roster || []).forEach((player: any) => {
-                    const innerLs = player.linescores?.[0]?.linescores?.[0];
+                    const innerLs = player.linescores?.[0]?.linescores?.[0] || player.linescores?.[0];
                     if (!innerLs) return;
-                    const stats = innerLs.statistics?.categories?.[0]?.stats;
+                    // Check if player is currently batting (has inner statistics or batting stats)
+                    const stats = innerLs.statistics?.categories?.[0]?.stats || innerLs.statistics?.batting?.stats;
                     if (!stats) return;
-                    const getStat = (name: string) => {
-                        const s = stats.find((st: any) => st.name === name);
+
+                    const getStatVal = (name: string) => {
+                        const s = stats.find ? stats.find((st: any) => st.name === name) : null;
                         return s ? Number(s.value) : 0;
                     };
-                    if (getStat('batted') === 1 && getStat('dismissal') === 0) {
+                    
+                    // On some matches, batted/dismissal isn't in 'categories', it's in a direct list
+                    const isBatted = getStatVal('batted') || (innerLs.statistics?.batting ? 1 : 0);
+                    const isOut = getStatVal('dismissal') || (innerLs.statistics?.batting?.outText ? 1 : 0);
+                    
+                    if (isBatted === 1 && isOut === 0) {
                         result.batters.push({
                             name: player.athlete?.displayName || 'Unknown',
-                            runs: getStat('runs'),
-                            balls: getStat('ballsFaced'),
-                            fours: getStat('fours'),
-                            sixes: getStat('sixes'),
-                            strikeRate: getStat('strikeRate')
+                            runs: getStatVal('runs') || Number(innerLs.statistics?.batting?.runs || 0),
+                            balls: getStatVal('ballsFaced') || Number(innerLs.statistics?.batting?.ballsFaced || 0),
+                            fours: getStatVal('fours') || Number(innerLs.statistics?.batting?.fours || 0),
+                            sixes: getStatVal('sixes') || Number(innerLs.statistics?.batting?.sixes || 0),
+                            strikeRate: getStatVal('strikeRate') || Number(innerLs.statistics?.batting?.strikeRate || 0)
                         });
                     }
                 });
@@ -412,30 +427,31 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         // Fallback: Extract bowlers from bowling team roster
         if (result.bowlers.length === 0) {
             rosters.forEach((roster: any) => {
-                if (String(roster.team?.id) !== String(bowlingTeamIdForRoster)) return;
                 (roster.roster || []).forEach((player: any) => {
-                    const innerLs = player.linescores?.[0]?.linescores?.[0];
+                    const innerLs = player.linescores?.[0]?.linescores?.[0] || player.linescores?.[0];
                     if (!innerLs) return;
-                    const stats = innerLs.statistics?.categories?.[0]?.stats;
+                    const stats = innerLs.statistics?.categories?.[0]?.stats || innerLs.statistics?.bowling?.stats;
                     if (!stats) return;
-                    const getStat = (name: string) => {
-                        const s = stats.find((st: any) => st.name === name);
+                    
+                    const getStatVal = (name: string) => {
+                        const s = stats.find ? stats.find((st: any) => st.name === name) : null;
                         return s ? Number(s.value) : 0;
                     };
-                    const overs = getStat('overs');
+                    
+                    const overs = getStatVal('overs') || Number(innerLs.statistics?.bowling?.overs || 0);
                     if (overs > 0) {
                         result.bowlers.push({
                             name: player.athlete?.displayName || 'Unknown',
                             overs,
-                            runs: getStat('conceded'),
-                            wickets: getStat('wickets'),
-                            economy: getStat('economyRate') || parseFloat((getStat('conceded') / overs).toFixed(2))
+                            runs: getStatVal('conceded') || Number(innerLs.statistics?.bowling?.conceded || 0),
+                            wickets: getStatVal('wickets') || Number(innerLs.statistics?.bowling?.wickets || 0),
+                            economy: getStatVal('economyRate') || parseFloat((getStatVal('conceded') / (overs || 1)).toFixed(2))
                         });
                     }
                 });
             });
-            // Sort by most overs, keep the most active bowler
-            result.bowlers.sort((a: any, b: any) => b.overs - a.overs);
+            // Keep most active bowler (highest overs)
+            result.bowlers.sort((a: any, b: any) => (parseFloat(b.overs) || 0) - (parseFloat(a.overs) || 0));
             if (result.bowlers.length > 1) {
                 result.bowlers = [result.bowlers[0]];
             }
