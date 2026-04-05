@@ -212,8 +212,28 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             result.over_limit = summaryData.event.competitions[0].overLimit;
         }
 
-        // === 1. LIVE COMMENTARY from notes + roster dismissals ===
+        // === 1. LIVE COMMENTARY from notes + roster dismissals + Telemetry Synthesis ===
         const commentary: any[] = [];
+
+        // Telemetry Synthesis (Fresh pulse for every ball)
+        const currentDetail = summaryData.header?.status?.summary || summaryText;
+        if (currentDetail && !['Live', 'Live Detail'].includes(currentDetail)) {
+             commentary.push({
+                over: result.overs,
+                ball: `⚡ ${currentDetail}`,
+                type: 'status'
+             });
+        }
+
+        // Add a 'Telemetry Update' if the match is live — ensures feed never feels 'stale'
+        if (mappedStatus === 'LIVE') {
+            const rrr = result.is_second_innings ? ((result.target - runsVal) / (Math.max(0.1, (result.over_limit || 20) - oversFloat))).toFixed(2) : '0.00';
+            commentary.push({
+                over: result.overs,
+                ball: `🤖 AI PULSE: Score ${result.score} at ${result.overs} ov. ${result.is_second_innings ? `Req. Rate: ${rrr}` : `Proj. Score: ${result.predicted_score}`}`,
+                type: 'normal'
+            });
+        }
 
         // 1a. Match Notes (powerplays, milestones, reviews, strategic timeouts, innings breaks)
         const notes = summaryData.notes || [];
@@ -229,11 +249,16 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
 
             // Extract over from text like "Strategic Timeout: LSG - 65/4 in 8.5 overs"
             const overMatch = text.match(/(\d+\.?\d*)\s*ov/i);
-            commentary.push({
-                over: overMatch ? overMatch[1] : (note.section || ''),
-                ball: text,
-                type
-            });
+            const overVal = overMatch ? overMatch[1] : (note.section || '');
+            
+            // Avoid duplicates from status updates
+            if (overVal) {
+                commentary.push({
+                    over: overVal,
+                    ball: text,
+                    type
+                });
+            }
         });
 
         // 1b. Dismissal details from rosters (rich ball-by-ball text for each wicket)
