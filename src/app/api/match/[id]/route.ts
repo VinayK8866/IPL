@@ -347,23 +347,39 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         result.live_commentary = commentary.slice(0, 20);
 
         // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
-        // 1. Primary: Use the identified plays (isPlay: true)
-        let ballPlays = (result.live_commentary || []).filter((c: any) => c.isPlay === true);
+        // STRATEGY: Only use verified ball-by-ball plays (isPlay: true). 
+        // DO NOT fallback to match notes, as they are editorial highlights (mostly wickets) 
+        // that pollute the rolling timeline with redundant 'W' icons.
+        const verifiedPlays = commentary.filter((c: any) => c.isPlay === true);
         
-        // 2. Fallback: If no dedicated plays found, try to infer them from commentary categories or text
-        if (ballPlays.length === 0) {
-            ballPlays = (result.live_commentary || []).filter((c: any) => 
-                ['dot', 'runs', 'four', 'six', 'wicket'].includes(c.type) || 
-                (c.over && c.ball && (c.ball.includes('runs') || c.ball.includes('FOUR') || c.ball.includes('SIX') || c.ball.includes('OUT')))
+        // Final sanity check: if even verified plays is empty (rare), 
+        // only then try a very strict regex on the full commentary.
+        let finalBallSource = verifiedPlays;
+        if (finalBallSource.length === 0) {
+            finalBallSource = commentary.filter((c: any) => 
+               c.over && c.ball && /^\d+\.\d+/.test(c.over) && // Must be a specific ball number like 12.4
+               !c.ball.includes('Strategic Timeout') &&
+               !c.ball.includes('Powerplay')
             );
         }
 
-        result.last_balls = ballPlays.slice(0, 12).map((c: any) => ({
-            value: c.type === 'wicket' ? 'W' : (c.type === 'four' ? '4' : (c.type === 'six' ? '6' : (c.runs === 0 ? '0' : String(c.runs || '0')))),
-            is_wicket: c.type === 'wicket' || (c.ball && c.ball.includes('OUT')),
-            timestamp: new Date().toISOString(),
-            over: c.over
-        })).reverse();
+        result.last_balls = finalBallSource.slice(0, 12).map((c: any) => {
+            const isWicket = c.type === 'wicket' || (c.ball && c.ball.toLowerCase().includes('out!'));
+            let val = '0';
+            if (isWicket) val = 'W';
+            else if (c.type === 'four' || (c.ball && c.ball.toLowerCase().includes('four'))) val = '4';
+            else if (c.type === 'six' || (c.ball && c.ball.toLowerCase().includes('six'))) val = '6';
+            else if (c.type === 'runs' || c.runs > 0) val = String(c.runs || '1');
+            else if (c.type === 'dot') val = '0';
+            else val = String(c.runs || '0');
+
+            return {
+                value: val,
+                is_wicket: isWicket,
+                timestamp: new Date().toISOString(),
+                over: c.over
+            };
+        }).reverse();
 
         // === 2. PLAYER STATS: Try situation first, fall back to rosters ===
         const situ = summaryData.situation;
