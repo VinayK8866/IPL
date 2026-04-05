@@ -2,10 +2,10 @@
 
 import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Batter, MatchScore, Bowler } from '../../lib/data-engine/types';
-import { usePlayerFireState } from '../../hooks/usePlayerFireState';
+import { Batter, MatchScore } from '@/lib/data-engine/types';
+import { usePlayerFireState } from '@/hooks/usePlayerFireState';
 import { PlayerFireVFX } from './PlayerFireVFX';
-import { useMatchData } from '../../providers/MatchDataProvider';
+import { useMatchData } from '@/providers/MatchDataProvider';
 
 /**
  * PROJECT CRICKET PULSE - CORE SCOREBOARD
@@ -16,7 +16,7 @@ import { useMatchData } from '../../providers/MatchDataProvider';
 const Counter = React.memo(({ value, className }: { value: string | number; className?: string }) => (
   <AnimatePresence mode="popLayout" initial={false}>
     <motion.span
-      key={value || 0}
+      key={`${value}`}
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: -20, opacity: 0 }}
@@ -47,7 +47,7 @@ const ActiveBatter = React.memo(({ batter, matchId, isStreamLayout }: { batter: 
 
   return (
     <PlayerFireVFX isGlowing={isGlowing} intensity={intensity}>
-      <div className={`relative ${isStreamLayout ? 'p-6' : 'p-4'} bg-[#1A1F29]/95 border-l-4 ${isGlowing ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden group select-none h-full`}>
+      <div className={`relative ${isStreamLayout ? 'p-6' : 'p-4'} bg-[#1A1F29]/95 border-l-4 ${isGlowing ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden h-full`}>
         <div className="relative z-10 flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <div className="flex flex-col">
@@ -98,7 +98,12 @@ const ActiveBatter = React.memo(({ batter, matchId, isStreamLayout }: { batter: 
 ActiveBatter.displayName = 'ActiveBatter';
 
 const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; isStreamLayout?: boolean }) => {
-  const currentRuns = parseInt(score.score?.split('/')[0]) || 0;
+  const currentRuns = useMemo(() => {
+    if (!score.score) return 0;
+    const parts = score.score.split('/');
+    return parseInt(parts[0]) || 0;
+  }, [score.score]);
+
   const remainingRuns = score.target ? score.target - currentRuns : null;
   const oversDone = typeof score.overs === 'string' ? parseFloat(score.overs) : (score.overs || 0);
   const ballsPlayed = Math.floor(oversDone) * 6 + Math.round((oversDone % 1) * 10);
@@ -111,7 +116,7 @@ const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; is
         <div className="bg-[#FFD700] p-2 flex justify-center items-center overflow-hidden relative">
            <div className="absolute inset-0 bg-black/10 animate-pulse" />
            <span className="text-[14px] font-black italic text-black uppercase tracking-tighter z-10">
-              {score.team_a} NEED <span className="text-[20px] mx-1">{remainingRuns}</span> RUNS IN <span className="text-[20px] mx-1">{remainingBalls}</span> BALLS
+              {score.team_a || 'TBA'} NEED <span className="text-[20px] mx-1">{remainingRuns}</span> RUNS IN <span className="text-[20px] mx-1">{remainingBalls}</span> BALLS
            </span>
         </div>
       )}
@@ -122,7 +127,7 @@ const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; is
               {score.status_text && score.status_text.includes('Live') ? 'LIVE STATS' : score.status_text || 'MATCH BOARD'}
             </span>
             <div className="flex items-baseline gap-3">
-              <Counter value={score.score === '0/0' && score.status_text ? 'LIVE' : (score.score || '0/0')} className={`${isStreamLayout ? 'text-7xl' : 'text-5xl'} font-black italic tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]`} />
+              <Counter value={(score.score === '0/0' && score.status_text) ? 'LIVE' : (score.score || '0/0')} className={`${isStreamLayout ? 'text-7xl' : 'text-5xl'} font-black italic tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]`} />
               <div className="flex flex-col">
                 <span className={`${isStreamLayout ? 'text-xl' : 'text-sm'} font-black text-gray-400`}>({score.overs || '0.0'})</span>
               </div>
@@ -149,7 +154,7 @@ const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; is
            <div className="flex gap-1.5 transform skew-x-[10deg] overflow-x-auto no-scrollbar">
               {score.last_balls && score.last_balls.length > 0 ? (
                 score.last_balls.slice(-12).map((ball, idx) => (
-                  <BallBubble key={idx} value={ball.is_wicket ? 'W' : (ball as any).value || '0'} isWicket={ball.is_wicket} />
+                  <BallBubble key={`${idx}-${ball.timestamp}`} value={ball.is_wicket ? 'W' : (ball as any).value || '0'} isWicket={ball.is_wicket} />
                 ))
               ) : (
                 [...Array(6)].map((_, i) => <BallBubble key={i} value="-" />)
@@ -195,7 +200,10 @@ const PredictionTicker = React.memo(({ score }: { score: MatchScore }) => {
 PredictionTicker.displayName = 'PredictionTicker';
 
 const ActiveBowler = React.memo(({ bowler, isStreamLayout }: { bowler: any, isStreamLayout?: boolean }) => {
-  const oversDone = typeof bowler.overs === 'string' ? parseFloat(bowler.overs) : (bowler.overs || 0);
+  const oversDone = useMemo(() => {
+    return typeof bowler.overs === 'string' ? parseFloat(bowler.overs) : (bowler.overs || 0);
+  }, [bowler.overs]);
+  
   const ballsBowled = Math.floor(oversDone) * 6 + Math.round((oversDone % 1) * 10);
   const econ = ballsBowled > 0 ? (bowler.runs / ballsBowled) * 6 : 0;
 

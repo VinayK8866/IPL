@@ -2,14 +2,12 @@
 
 import React, { createContext, useContext, useRef, useMemo, useEffect, useState } from 'react';
 import * as THREE from 'three';
-import { useFrame } from '@react-three/fiber';
 import { useLatencySync } from '@/lib/hooks/useLatencySync';
 
 /**
  * PROJECT CRICKET PULSE - VFX GLOBAL PROVIDER
  * 
- * Manages global uniforms for all shaders (e.g., uTime, uResolution, uGlobalHype).
- * Handles synchronized visual triggers that respect the match_delay_offset.
+ * Manages global uniforms and synchronized visual triggers.
  */
 
 interface VFXContextType {
@@ -34,15 +32,24 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [shakeActive, setShakeActive] = useState(false);
   const [aura, setAura] = useState<string | null>(null);
 
-  // Global uniforms to be shared across all shader materials
+  // Resolution handling (More stable for SSR/Hydration)
+  const [res, setRes] = useState<[number, number]>([1920, 1080]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setRes([window.innerWidth, window.innerHeight]);
+      const handleResize = () => setRes([window.innerWidth, window.innerHeight]);
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
+
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
-    uResolution: { value: new THREE.Vector2(typeof window !== 'undefined' ? window.innerWidth : 1920, typeof window !== 'undefined' ? window.innerHeight : 1080) },
+    uResolution: { value: new THREE.Vector2(res[0], res[1]) },
     uGlobalHype: { value: 0.5 }
-  }), []);
+  }), [res]);
 
-  // Use R3F update loop to update global time uniform (if available)
-  // For standard React components, we use requestAnimationFrame
   useEffect(() => {
     let frameId: number;
     const update = (time: number) => {
@@ -53,16 +60,10 @@ export const VFXProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => cancelAnimationFrame(frameId);
   }, [uniforms]);
 
-  // Synchronized trigger system
   const triggerExplosion = (type: 'four' | 'six' | 'wicket', teamColor: string, eventTime?: number) => {
-    // Pipe the visual trigger through the global sync delay
     syncDelay(() => {
       setActiveExplosion({ type, teamColor, id: Date.now() });
-      
-      // Auto-clear after duration to allow re-triggering
-      setTimeout(() => {
-        setActiveExplosion(null);
-      }, 5000); 
+      setTimeout(() => setActiveExplosion(null), 5000); 
     }, eventTime);
   };
 

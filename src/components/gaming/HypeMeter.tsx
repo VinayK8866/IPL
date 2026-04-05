@@ -2,10 +2,10 @@
 
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion, useSpring, useTransform, AnimatePresence } from 'framer-motion';
-import { useCricketRealtime } from '../../hooks/useCricketRealtime';
 import { supabase } from '../../lib/supabaseClient';
 import { HypeBurst } from '../dashboard/HypeBurst';
 import { useVFX } from '../dashboard/vfx/VFXProvider';
+import { useMatchData } from '@/providers/MatchDataProvider';
 
 /**
  * PROJECT CRICKET PULSE - GLOBAL HYPE METER
@@ -20,8 +20,6 @@ interface HypeMeterProps {
   teamB?: { name: string; color: string };
 }
 
-import { useMatchData } from '@/providers/MatchDataProvider';
-
 export const HypeMeter = React.memo(({ 
   matchId, 
   teamA: propTeamA, 
@@ -29,7 +27,6 @@ export const HypeMeter = React.memo(({
 }: HypeMeterProps) => {
   const { hype, score } = useMatchData();
   
-  // Resolve team names and colors: Props > Live Data > Defaults
   const teamA = useMemo(() => ({
     name: propTeamA?.name || score?.team_a || 'TEAM A',
     color: propTeamA?.color || '#FFD700'
@@ -40,18 +37,15 @@ export const HypeMeter = React.memo(({
     color: propTeamB?.color || '#7A3FE1'
   }), [propTeamB, score?.team_b]);
   
-  // Local session click buffers for ZERO-LATENCY feedback
   const [localClicksA, setLocalClicksA] = useState(0);
   const [localClicksB, setLocalClicksB] = useState(0);
 
-  // Momentum-based physics for the bar transitions
   const springConfig = { damping: 25, stiffness: 120, bounce: 0.4 };
   const percentageA = useSpring(50, springConfig);
 
-  // Calculate current tug-of-war balance
   const effectiveA = (hype?.team_a_clicks || 0) + localClicksA;
   const effectiveB = (hype?.team_b_clicks || 0) + localClicksB;
-  const total = effectiveA + effectiveB || 100; // Use 100 as base if zero clicks
+  const total = effectiveA + effectiveB || 100;
   const calcPercentA = (effectiveA / total) * 100;
 
   useEffect(() => {
@@ -61,14 +55,11 @@ export const HypeMeter = React.memo(({
   const { triggerShake } = useVFX();
 
   const handleBoost = useCallback(async (team: 'a' | 'b') => {
-    // 1. Optimistic Update
     if (team === 'a') setLocalClicksA(prev => prev + 1);
     else setLocalClicksB(prev => prev + 1);
 
-    // 2. Visual Punch
     triggerShake(0.5, 200);
 
-    // 3. High-frequency atomic increment via RPC
     const { error } = await supabase.rpc('increment_match_hype', {
       p_match_id: matchId,
       p_team: team === 'a' ? 'team_a' : 'team_b'
@@ -81,8 +72,6 @@ export const HypeMeter = React.memo(({
 
   return (
     <div className="w-full flex flex-col gap-4 p-8 bg-[#0B0E14] border-l-4 border-[#7A3FE1] shadow-2xl skew-x-[-2deg] select-none relative overflow-hidden">
-      
-      {/* Header Stat Display */}
       <div className="flex justify-between items-baseline mb-2">
         <div className="flex flex-col">
           <span className="text-[10px] font-black tracking-[0.3em] uppercase opacity-50 text-white">Domination Meter</span>
@@ -105,7 +94,6 @@ export const HypeMeter = React.memo(({
         </div>
       </div>
 
-      {/* Main Bar Visualization */}
       <div className="h-12 w-full bg-[#1A1F29]/50 relative overflow-hidden flex transform skew-x-[-15deg] border border-white/5">
         <motion.div 
           className="h-full relative overflow-hidden" 
@@ -140,7 +128,6 @@ export const HypeMeter = React.memo(({
         />
       </div>
 
-      {/* Boost Action Buttons */}
       <div className="grid grid-cols-2 gap-4 mt-2">
         <motion.button
           whileHover={{ scale: 1.05, y: -2 }}
@@ -165,7 +152,6 @@ export const HypeMeter = React.memo(({
 
       <HypeBurst />
 
-      {/* Latency Sync Ticker */}
       <div className="flex justify-center mt-4">
         <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 skew-x-[-5deg]">
           <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_5px_rgba(34,197,94,1)]" />
@@ -174,14 +160,6 @@ export const HypeMeter = React.memo(({
           </span>
         </div>
       </div>
-
-      <style jsx>{`
-         @keyframes pulse-fast {
-           0% { opacity: 0.3; }
-           50% { opacity: 0.7; }
-           100% { opacity: 0.3; }
-         }
-      `}</style>
     </div>
   );
 });
