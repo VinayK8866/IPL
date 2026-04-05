@@ -24,11 +24,14 @@ export const WagonWheel = React.memo(({ matchId }: WagonWheelProps) => {
   // Here we derive it from ball.x (angle) and ball.y (distance) for the demo.
   const hits = useMemo(() => {
     if (!score?.last_balls) return [];
-    return score.last_balls.map((ball, i) => {
+    // Filter for balls that have coordinates for the simulation
+    const validBalls = score.last_balls.filter(b => b.y !== undefined && b.z !== undefined);
+    
+    return validBalls.map((ball, i) => {
       // JUGAAD: Use the parsed angle from commentary (stored in z)
       const angle = (ball.z as number) || 0;
-      const distance = (ball.y * 50) + 40; // Scale distance for better visual spread
-      const isBoundary = ball.y > 0.7;
+      const distance = ((ball.y || 0) * 50) + 40; // Scale distance for better visual spread
+      const isBoundary = (ball.y || 0) > 0.7;
       
       return {
         id: ball.timestamp + i,
