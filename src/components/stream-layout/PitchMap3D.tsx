@@ -29,9 +29,9 @@ const BallSphere = React.memo(({ ball, index }: BallSphereProps) => {
     }
   });
 
-  const ballColor = ball.is_wicket ? '#FF3366' : (ball.type === 'spin' ? '#7A3FE1' : '#FFD700');
-  const posX = (ball.x * 4) - 2;
-  const posZ = (ball.y * 18) - 9;
+    const ballColor = ball.is_wicket ? '#FF3366' : (ball.type === 'spin' ? '#7A3FE1' : '#FFD700');
+  const posX = ((ball.x || 0) * 4) - 2;
+  const posZ = ((ball.y || 0) * 18) - 9;
 
   return (
     <mesh ref={meshRef} position={[posX, (ball.z || 0) + 0.2, posZ]}>
@@ -64,6 +64,9 @@ import { useMatchData } from '@/providers/MatchDataProvider';
 export const StreamPitchMap = React.memo(({ matchId }: { matchId: string }) => {
   const { score } = useMatchData();
   const currentBalls = score?.last_balls || [];
+  const validBalls = useMemo(() => {
+    return currentBalls.filter(b => b.x !== undefined && b.y !== undefined);
+  }, [currentBalls]);
 
   return (
     <div className="w-full h-full bg-black relative">
@@ -75,13 +78,13 @@ export const StreamPitchMap = React.memo(({ matchId }: { matchId: string }) => {
         
         <PitchBase />
         
-        {currentBalls.map((ball, i) => (
+        {validBalls.map((ball, i) => (
           <BallSphere key={ball.timestamp} ball={ball} index={i} />
         ))}
 
-        {currentBalls.length > 0 && (
+        {validBalls.length > 0 && (
           <Line 
-            points={[[0, 3, -12], [currentBalls[0].x * 2.5 - 1.25, currentBalls[0].z || 0.2, currentBalls[0].y * 12 - 6]]}
+            points={[[0, 3, -12], [(validBalls[0].x || 0) * 2.5 - 1.25, validBalls[0].z || 0.2, (validBalls[0].y || 0) * 12 - 6]]}
             color="#FFD700"
             lineWidth={2}
             opacity={0.5}
