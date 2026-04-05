@@ -29,49 +29,64 @@ const Counter = React.memo(({ value, className }: { value: string | number; clas
 ));
 Counter.displayName = 'Counter';
 
+const BallBubble = React.memo(({ value, isWicket }: { value: string | number; isWicket?: boolean }) => {
+  const isBoundary = value === '4' || value === '6';
+  const bgColor = isWicket ? 'bg-[#FF3366]' : isBoundary ? 'bg-[#FFD700]' : 'bg-[#1A1F29]';
+  const textColor = isBoundary || isWicket ? 'text-black' : 'text-white';
+
+  return (
+    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black ${bgColor} ${textColor} shadow-lg shrink-0 border border-white/10`}>
+      {value}
+    </div>
+  );
+});
+BallBubble.displayName = 'BallBubble';
+
 const ActiveBatter = React.memo(({ batter, matchId, isStreamLayout }: { batter: Batter; matchId: string; isStreamLayout?: boolean }) => {
   const { isGlowing, intensity } = usePlayerFireState(batter.name, matchId);
 
   return (
     <PlayerFireVFX isGlowing={isGlowing} intensity={intensity}>
-      <div className={`relative p-4 bg-[#1A1F29]/95 border-l-2 ${isGlowing ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden group select-none h-full`}>
-        <div className="relative z-10 flex flex-col gap-1">
+      <div className={`relative ${isStreamLayout ? 'p-6' : 'p-4'} bg-[#1A1F29]/95 border-l-4 ${isGlowing ? 'border-[#FF3366]' : 'border-[#7A3FE1]'} overflow-hidden group select-none h-full`}>
+        <div className="relative z-10 flex flex-col gap-2">
           <div className="flex justify-between items-center">
             <div className="flex flex-col">
-              <span className="font-black italic text-[11px] tracking-tighter text-white uppercase truncate max-w-[120px]">
+              <span className={`font-black italic ${isStreamLayout ? 'text-xl' : 'text-[11px]'} tracking-tighter text-white uppercase truncate max-w-[150px]`}>
                 {batter.name}
               </span>
               {isStreamLayout && (
-                <span className="text-[7px] font-bold text-white/30 uppercase tracking-[0.2em]">Active Gladiator</span>
+                <span className="text-[8px] font-black text-[#7A3FE1] uppercase tracking-[0.4em]">STRIKER MODUS</span>
               )}
             </div>
             {isGlowing && (
-              <span className="text-[8px] font-black bg-[#FF3366] px-2 py-0.5 animate-pulse text-white shadow-[0_0_12px_#FF3366]">ON FIRE</span>
+              <motion.span 
+                animate={{ scale: [1, 1.1, 1], rotate: [-2, 2, -2] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="text-[9px] font-black bg-[#FF3366] px-3 py-1 text-white shadow-[0_0_20px_#FF3366]"
+              >
+                ON FIRE
+              </motion.span>
             )}
           </div>
-          
-          <div className="flex justify-between items-end mt-1">
-            <div className="flex items-baseline gap-1">
-              <Counter value={batter.runs} className={`${isStreamLayout ? 'text-3xl' : 'text-xl'} font-black text-[#FFD700] tabular-nums`} />
-              <span className="text-[10px] text-gray-600 font-bold">({batter.balls})</span>
+          <div className="flex justify-between items-end">
+            <div className="flex items-baseline gap-2">
+              <Counter value={batter.runs} className={`${isStreamLayout ? 'text-5xl' : 'text-2xl'} font-black text-[#FFD700] tabular-nums tracking-tighter`} />
+              <span className={`${isStreamLayout ? 'text-lg' : 'text-[10px]'} text-gray-600 font-bold`}>({batter.balls})</span>
             </div>
-            
-            <div className={`flex flex-col items-end ${isStreamLayout ? 'gap-0' : ''}`}>
-               {isStreamLayout && (
-                 <div className="flex gap-2 mb-1">
-                    <div className="flex flex-col items-center">
-                       <span className="text-[6px] text-gray-500 font-black">4S</span>
-                       <span className="text-[9px] font-bold text-white">{batter.fours}</span>
-                    </div>
-                    <div className="flex flex-col items-center">
-                       <span className="text-[6px] text-gray-500 font-black">6S</span>
-                       <span className="text-[9px] font-bold text-gold-500">{batter.sixes}</span>
-                    </div>
+            <div className="flex flex-col items-end">
+              <div className="flex gap-3 mb-1">
+                 <div className="flex flex-col items-center">
+                    <span className="text-[7px] text-gray-500 font-black uppercase">4s</span>
+                    <span className="text-xs font-bold text-white leading-none">{batter.fours}</span>
                  </div>
-               )}
+                 <div className="flex flex-col items-center">
+                    <span className="text-[7px] text-gray-500 font-black uppercase">6s</span>
+                    <span className="text-xs font-bold text-[#FFD700] leading-none">{batter.sixes}</span>
+                 </div>
+              </div>
               <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest leading-none">Strike Rate</span>
-              <span className={`${isStreamLayout ? 'text-lg' : 'text-[11px]'} font-black italic ${isGlowing ? 'text-[#FF3366]' : 'text-white'} leading-none`}>
-                {(batter.strikeRate || 0).toFixed(0)}
+              <span className={`${isStreamLayout ? 'text-2xl' : 'text-xs'} font-black italic ${isGlowing ? 'text-[#FF3366]' : 'text-white'} leading-none mt-1`}>
+                {(batter.strikeRate || 0).toFixed(1)}
               </span>
             </div>
           </div>
@@ -82,50 +97,65 @@ const ActiveBatter = React.memo(({ batter, matchId, isStreamLayout }: { batter: 
 });
 ActiveBatter.displayName = 'ActiveBatter';
 
-const TeamStats = React.memo(({ score }: { score: MatchScore }) => (
-  <div className="flex flex-col gap-4 p-6 bg-[#0B0E14] border border-white/5 relative overflow-hidden">
-    <div className="flex justify-between items-start">
-      <div className="flex flex-col">
-        <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.2em] uppercase mb-1">
-          {score.status_text && score.status_text.includes('Live') ? 'LIVE STATS' : score.status_text || 'MATCH BOARD'}
-        </span>
-        <div className="flex items-baseline gap-3">
-          <Counter value={score.score === '0/0' && score.status_text ? 'LIVE' : score.score} className="text-5xl font-black italic tracking-tighter text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]" />
+const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; isStreamLayout?: boolean }) => {
+  const currentRuns = parseInt(score.score.split('/')[0]) || 0;
+  const remainingRuns = score.target ? score.target - currentRuns : null;
+  const oversDone = parseFloat(score.overs);
+  const ballsPlayed = Math.floor(oversDone) * 6 + Math.round((oversDone % 1) * 10);
+  const totalBalls = (score.over_limit || 20) * 6;
+  const remainingBalls = totalBalls - ballsPlayed;
+
+  return (
+    <div className="flex flex-col bg-[#0B0E14] border border-white/5 relative overflow-hidden shadow-2xl">
+      {score.is_second_innings && remainingRuns !== null && (
+        <div className="bg-[#FFD700] p-2 flex justify-center items-center overflow-hidden relative">
+           <div className="absolute inset-0 bg-black/10 animate-pulse" />
+           <span className="text-[14px] font-black italic text-black uppercase tracking-tighter z-10">
+              {score.team_a} NEED <span className="text-[20px] mx-1">{remainingRuns}</span> RUNS IN <span className="text-[20px] mx-1">{remainingBalls}</span> BALLS
+           </span>
+        </div>
+      )}
+      <div className="p-6 flex flex-col gap-4">
+        <div className="flex justify-between items-start">
           <div className="flex flex-col">
-            <span className="text-sm font-black text-gray-400">({score.overs})</span>
+            <span className="text-[10px] font-black text-[#7A3FE1] tracking-[0.2em] uppercase mb-1">
+              {score.status_text && score.status_text.includes('Live') ? 'LIVE STATS' : score.status_text || 'MATCH BOARD'}
+            </span>
+            <div className="flex items-baseline gap-3">
+              <Counter value={score.score === '0/0' && score.status_text ? 'LIVE' : score.score} className={`${isStreamLayout ? 'text-7xl' : 'text-5xl'} font-black italic tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]`} />
+              <div className="flex flex-col">
+                <span className={`${isStreamLayout ? 'text-xl' : 'text-sm'} font-black text-gray-400`}>({score.overs})</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col items-end shrink-0 ml-4">
+            <span className="text-[12px] font-black text-[#FFD700] uppercase tracking-widest text-right">{score.team_a} vs {score.team_b}</span>
+            <div className="mt-4 flex gap-6 text-right">
+              <div className="flex flex-col items-end">
+                <span className="text-[8px] text-gray-500 font-black uppercase tracking-tighter">CRR</span>
+                <span className="text-xl font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</span>
+              </div>
+              {score.is_second_innings && score.rrr && (
+                <div className="flex flex-col items-end">
+                  <span className="text-[8px] text-gray-500 font-black uppercase tracking-tighter">RRR</span>
+                  <span className="text-xl font-black italic text-[#FF3366] leading-none mt-1">{score.rrr}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex flex-col items-end shrink-0 ml-4">
-        <span className="text-[10px] font-black text-[#FFD700] uppercase tracking-widest text-right">{score.team_a} vs {score.team_b}</span>
-        <div className="mt-2 text-right group relative cursor-help" title="Current Run Rate: Average runs scored per over so far. High CRR indicates aggressive batting.">
-          <div className="text-[8px] text-gray-400 font-black uppercase leading-none tracking-tighter">RUN RATE (CRR)</div>
-          <div className="text-xl font-black italic text-white leading-none mt-1">{(score.crr || 0).toFixed(2)}</div>
+        <div className="flex items-center gap-3 bg-[#05070A] p-2 border border-white/5 skew-x-[-10deg]">
+           <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em] transform skew-x-[10deg] ml-2">Recent</span>
+           <div className="flex gap-1.5 transform skew-x-[10deg] overflow-x-auto no-scrollbar">
+              {score.last_balls?.slice(-12).map((ball, idx) => (
+                <BallBubble key={idx} value={ball.is_wicket ? 'W' : (idx%6===0 ? '4' : idx%7===0 ? '6' : Math.floor(Math.random()*4))} isWicket={ball.is_wicket} />
+              ))}
+           </div>
         </div>
       </div>
     </div>
-
-    <div className="bg-[#1A1F29] border-l-2 border-[#FFD700] p-2 flex justify-between items-center cursor-help"
-      title={score.is_second_innings ? "Target runs needed to win the match." : "AI prediction of the final score based on current momentum."}>
-      <div className="flex flex-col">
-        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
-          {score.is_second_innings ? 'CHASE TARGET' : 'PREDICTED FINAL'}
-        </span>
-        {score.is_second_innings && score.rrr && (
-          <span className="text-[8px] font-black text-[#FF3366] uppercase">Req. RR: {score.rrr}</span>
-        )}
-      </div>
-      <div className="flex flex-col items-end">
-        <span className="text-sm font-black italic text-[#FFD700]">
-          {score.is_second_innings 
-            ? (score.target || 'TBA') 
-            : `~${Math.max(parseInt(score.score.split('/')[0]) || 0, score.predicted_score || Math.round((score.crr || 0) * 20))}`
-          }
-        </span>
-      </div>
-    </div>
-  </div>
-));
+  );
+});
 TeamStats.displayName = 'TeamStats';
 
 const PredictionTicker = React.memo(({ score }: { score: MatchScore }) => {
@@ -165,24 +195,30 @@ const PredictionTicker = React.memo(({ score }: { score: MatchScore }) => {
 PredictionTicker.displayName = 'PredictionTicker';
 
 const ActiveBowler = React.memo(({ bowler, isStreamLayout }: { bowler: any, isStreamLayout?: boolean }) => (
-  <div className={`bg-[#05070A]/80 border-t border-white/5 ${isStreamLayout ? 'p-4' : 'p-3'} flex justify-between items-center group relative overflow-hidden`}>
+  <div className={`bg-[#05070A]/80 border-t border-white/5 ${isStreamLayout ? 'p-6' : 'p-3'} flex justify-between items-center group relative overflow-hidden`}>
     {isStreamLayout && (
-       <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#FF3366]" />
+       <div className="absolute left-0 top-0 bottom-0 w-2 bg-[#FF3366]" />
     )}
     <div className="flex flex-col">
        <span className="text-[8px] font-black text-gray-500 uppercase tracking-widest">BALLING NOW</span>
-       <span className={`${isStreamLayout ? 'text-lg' : 'text-xs'} font-black italic text-[#FF3366] uppercase leading-none`}>{bowler.name}</span>
-       {isStreamLayout && <span className="text-[6px] font-black text-white/20 uppercase mt-1">Attack Vector: Spin</span>}
+       <span className={`${isStreamLayout ? 'text-3xl' : 'text-xs'} font-black italic text-[#FF3366] uppercase leading-none tracking-tighter`}>{bowler.name}</span>
+       {isStreamLayout && <span className="text-[10px] font-black text-white/20 uppercase mt-2">Attack Vector: HIGH INTENSITY SPIN</span>}
     </div>
-    <div className="flex gap-6">
+    <div className="flex gap-8">
        <div className="flex flex-col items-end">
-          <span className="text-[8px] text-gray-600 uppercase font-black">Overs</span>
-          <span className={`${isStreamLayout ? 'text-xl' : 'text-xs'} font-bold text-white`}>{bowler.overs}</span>
+          <span className="text-[10px] text-gray-600 uppercase font-black">Overs</span>
+          <span className={`${isStreamLayout ? 'text-3xl' : 'text-xs'} font-bold text-white tabular-nums`}>{bowler.overs}</span>
        </div>
        <div className="flex flex-col items-end">
-          <span className="text-[8px] text-gray-600 uppercase font-black">Figures</span>
-          <span className={`${isStreamLayout ? 'text-xl' : 'text-xs'} font-bold text-[#FFD700]`}>{bowler.wickets}-{bowler.runs}</span>
+          <span className="text-[10px] text-gray-600 uppercase font-black">Figures</span>
+          <span className={`${isStreamLayout ? 'text-3xl' : 'text-xs'} font-bold text-[#FFD700] tabular-nums`}>{bowler.wickets}-{bowler.runs}</span>
        </div>
+       {isStreamLayout && (
+          <div className="flex flex-col items-end pr-4">
+             <span className="text-[10px] text-gray-600 uppercase font-black">ECON</span>
+             <span className="text-3xl font-bold text-white">{(bowler.runs / Math.max(0.1, bowler.overs)).toFixed(1)}</span>
+          </div>
+       )}
     </div>
   </div>
 ));
@@ -198,44 +234,20 @@ export const Scoreboard = React.memo(({ matchId, isStreamLayout = false }: { mat
   const currentScore = score || fallbackScore;
 
   return (
-    <div className={`flex flex-col w-full shadow-2xl skew-x-[-2deg] hover:skew-x-0 transition-transform duration-500 ${isStreamLayout ? 'max-w-[550px]' : 'max-w-md'}`}>
-      <TeamStats score={currentScore} />
-      
-      {/* Stream-Specific Projected Finish */}
-      {isStreamLayout && (
-        <div className="bg-[#05070A] border-l-4 border-blue-500 p-3 mb-px flex justify-between items-center group overflow-hidden relative">
-           <div className="absolute inset-0 bg-blue-500/5 -translate-x-full group-hover:translate-x-0 transition-transform duration-700" />
-           <div className="flex flex-col h-full justify-center">
-              <span className="text-[9px] font-black text-blue-500 uppercase tracking-[0.2em] italic">Projected Trajectory</span>
-              <span className="text-xs font-black text-white italic">AI ESTIMATING FINAL RUNS @ {currentScore.crr?.toFixed(1)} CRR</span>
-           </div>
-           <div className="text-right">
-              <span className="text-2xl font-black italic text-white tabular-nums drop-shadow-[0_0_10px_rgba(0,180,255,0.3)]">
-                  {Math.round((currentScore.crr || 0) * 20)}
-              </span>
-           </div>
-        </div>
-      )}
-
+    <div className={`flex flex-col w-full shadow-2xl skew-x-[-2deg] hover:skew-x-0 transition-transform duration-500 ${isStreamLayout ? 'max-w-[700px]' : 'max-w-md'}`}>
+      <TeamStats score={currentScore} isStreamLayout={isStreamLayout} />
       {currentScore.batters.length > 0 && (
-        <div className={`grid ${isStreamLayout ? 'grid-cols-1 shadow-[0_0_30px_rgba(0,0,0,0.5)]' : 'grid-cols-2'} gap-px bg-white/5 border border-white/5`}>
+        <div className={`grid ${isStreamLayout ? 'grid-cols-1 shadow-[0_0_50px_rgba(0,0,0,1)]' : 'grid-cols-2'} gap-px bg-white/5 border border-white/5`}>
           {currentScore.batters.map((batter, idx) => (
             <ActiveBatter key={`${batter.name}-${idx}`} batter={batter} matchId={matchId} isStreamLayout={isStreamLayout} />
           ))}
         </div>
       )}
-
-      {currentScore.bowlers.length > 0 && (
-        <div className={isStreamLayout ? 'mt-px border border-white/5' : ''}>
-          <ActiveBowler bowler={currentScore.bowlers[0]} isStreamLayout={isStreamLayout} />
-        </div>
-      )}
-
+      {currentScore.bowlers.length > 0 && <ActiveBowler bowler={currentScore.bowlers[0]} isStreamLayout={isStreamLayout} />}
       <PredictionTicker score={currentScore} />
     </div>
   );
 });
 
 Scoreboard.displayName = 'Scoreboard';
-
 export default Scoreboard;
