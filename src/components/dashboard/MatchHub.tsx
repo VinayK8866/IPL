@@ -192,7 +192,7 @@ export const MatchHubInner = () => {
   
         {/* BROADCASTER OVERRIDE */}
         <AdminControls matchId={id as string} />
-      </div>
+      </motion.div>
     );
 };
 
