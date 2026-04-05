@@ -33,8 +33,8 @@ const BallSphere = React.memo(({ ball, index }: BallSphereProps) => {
   
   // x: -1.5 to 1.5 across width
   // y: -8.8 to 8.8 between creases (17.6m pitch length effective)
-  const posX = (ball.x * 3) - 1.5;
-  const posZ = (ball.y * 17.6) - 8.8;
+  const posX = ((ball.x || 0) * 3) - 1.5;
+  const posZ = ((ball.y || 0) * 17.6) - 8.8;
 
   return (
     <mesh ref={meshRef} position={[posX, (ball.z || 0) + 0.1, posZ]}>
@@ -106,7 +106,7 @@ const PitchScene = React.memo(({ balls }: { balls: BallData[] }) => {
       {/* Delivery Path visualization for the latest ball */}
       {balls.length > 0 && (
         <Line 
-          points={[[0, 2, -10], [balls[0].x * 2 - 1, balls[0].z || 0.1, balls[0].y * 10 - 5]]}
+          points={[[0, 2, -10], [(balls[0].x || 0) * 2 - 1, balls[0].z || 0.1, (balls[0].y || 0) * 10 - 5]]}
           color="#FF3366"
           lineWidth={1}
           dashed
@@ -130,6 +130,9 @@ export const PitchMap3D = React.memo(({ matchId }: { matchId: string }) => {
   ];
 
   const currentBalls = score?.last_balls || fallbackBalls;
+  const validBalls = useMemo(() => {
+    return currentBalls.filter(b => b.x !== undefined && b.y !== undefined);
+  }, [currentBalls]);
 
   return (
     <div className="w-full h-[400px] bg-[#0B0E14] border border-white/5 relative overflow-hidden group select-none">
@@ -143,7 +146,7 @@ export const PitchMap3D = React.memo(({ matchId }: { matchId: string }) => {
         gl={{ antialias: true, stencil: false, depth: true }}
         dpr={[1, 2]} // Performance: Limit DPR on power-dense screens
       >
-        <PitchScene balls={currentBalls} />
+        <PitchScene balls={validBalls} />
       </Canvas>
 
       {/* Retro Arcade Vignette Effect */}
