@@ -33,12 +33,14 @@ export interface Bowler {
 }
 
 export interface BallData {
-  x: number;
-  y: number;
+  x?: number;
+  y?: number;
   z?: number;
-  type: 'pace' | 'spin' | 'special';
+  type?: 'pace' | 'spin' | 'special';
   is_wicket: boolean;
-  bowler_name?: string; // Added to support player-specific fire state
+  value?: string;
+  over?: string;
+  bowler_name?: string; 
   timestamp: string;
 }
 

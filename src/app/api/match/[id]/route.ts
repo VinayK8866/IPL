@@ -290,10 +290,18 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             if (commentaryV1Data?.comments?.length > 0) {
                 commentaryV1Data.comments.slice(0, 15).forEach((c: any) => {
                     let type = 'normal';
-                    const runs = c.runs || 0;
+                    // Robust run extraction
+                    let runs = (c.runs !== undefined) ? Number(c.runs) : (c.scoreValue !== undefined ? Number(c.scoreValue) : 0);
+                    
+                    // Fallback to title parsing if runs is 0 and it's not a wicket/dot
+                    if (runs === 0 && c.title) {
+                        const runMatch = c.title.match(/^(\d+)\s+run/i);
+                        if (runMatch) runs = parseInt(runMatch[1]);
+                    }
+
                     if (c.isWicket) type = 'wicket';
-                    else if (c.isFour) type = 'four';
-                    else if (c.isSix) type = 'six';
+                    else if (c.isFour || (c.isBoundary && runs === 4)) type = 'four';
+                    else if (c.isSix || (c.isBoundary && runs === 6)) type = 'six';
                     else if (runs === 0) type = 'dot';
                     else if (runs > 0) type = 'runs';
 
@@ -310,8 +318,17 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 const plays = summaryData.plays || [];
                 (plays || []).slice(0, 10).forEach((p: any) => {
                     let type = 'normal';
-                    let scoreVal = p.scoreValue || 0;
+                    let scoreVal = (p.scoreValue !== undefined) ? Number(p.scoreValue) : (p.runs !== undefined ? Number(p.runs) : 0);
+                    
+                    // Fallback to title parsing
+                    if (scoreVal === 0 && p.title) {
+                        const runMatch = p.title.match(/^(\d+)\s+run/i);
+                        if (runMatch) scoreVal = parseInt(runMatch[1]);
+                    }
+
                     if (p.dismissal) type = 'wicket';
+                    else if (p.isBoundary && scoreVal === 6) type = 'six';
+                    else if (p.isBoundary && scoreVal === 4) type = 'four';
                     else if (scoreVal === 6) type = 'six';
                     else if (scoreVal === 4) type = 'four';
                     else if (scoreVal === 0) type = 'dot';
@@ -369,9 +386,9 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             if (isWicket) val = 'W';
             else if (c.type === 'four' || (c.ball && c.ball.toLowerCase().includes('four'))) val = '4';
             else if (c.type === 'six' || (c.ball && c.ball.toLowerCase().includes('six'))) val = '6';
-            else if (c.type === 'runs' || c.runs > 0) val = String(c.runs || '1');
+            else if (c.type === 'runs' || (c.runs && c.runs > 0)) val = String(c.runs !== undefined ? c.runs : '1');
             else if (c.type === 'dot') val = '0';
-            else val = String(c.runs || '0');
+            else val = String(c.runs !== undefined ? c.runs : '0');
 
             return {
                 value: val,

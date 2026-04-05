@@ -152,13 +152,22 @@ const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; is
         <div className="flex items-center gap-3 bg-[#05070A] p-2 border border-white/5 skew-x-[-10deg]">
            <span className="text-[8px] font-black text-white/30 uppercase tracking-[0.2em] transform skew-x-[10deg] ml-2">Recent Ball Timeline</span>
            <div className="flex gap-1.5 transform skew-x-[10deg] overflow-x-auto no-scrollbar">
-              {score.last_balls && score.last_balls.length > 0 ? (
-                score.last_balls.slice(-12).map((ball, idx) => (
-                  <BallBubble key={`${idx}-${ball.timestamp}`} value={ball.is_wicket ? 'W' : (ball as any).value || '0'} isWicket={ball.is_wicket} />
-                ))
-              ) : (
-                [...Array(6)].map((_, i) => <BallBubble key={i} value="-" />)
-              )}
+              {(() => {
+                const oversFloat = parseFloat(score.overs || '0');
+                const currentOverWhole = Math.floor(oversFloat);
+                const currentBalls = (score.last_balls || []).filter(ball => {
+                  const ballOver = parseFloat(ball.over || '0');
+                  return Math.floor(ballOver) === currentOverWhole;
+                });
+                
+                if (currentBalls.length > 0) {
+                  return currentBalls.map((ball, idx) => (
+                    <BallBubble key={`${idx}-${ball.timestamp}`} value={ball.is_wicket ? 'W' : ball.value || '0'} isWicket={ball.is_wicket} />
+                  ));
+                }
+                
+                return [...Array(6)].map((_, i) => <BallBubble key={i} value="-" />);
+              })()}
            </div>
         </div>
       </div>
