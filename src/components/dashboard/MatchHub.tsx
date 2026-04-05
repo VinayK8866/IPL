@@ -192,12 +192,6 @@ export const MatchHubInner = () => {
   
         {/* BROADCASTER OVERRIDE */}
         <AdminControls matchId={id as string} />
-
-  
-        <style jsx global>{`
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        `}</style>
       </div>
     );
 };
