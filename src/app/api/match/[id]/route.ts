@@ -347,11 +347,20 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         result.live_commentary = commentary.slice(0, 20);
 
         // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
-        // We only want ACTUAL ball-by-ball outcomes, not summaries/notes.
-        const ballPlays = (result.live_commentary || []).filter((c: any) => c.isPlay === true);
+        // 1. Primary: Use the identified plays (isPlay: true)
+        let ballPlays = (result.live_commentary || []).filter((c: any) => c.isPlay === true);
+        
+        // 2. Fallback: If no dedicated plays found, try to infer them from commentary categories or text
+        if (ballPlays.length === 0) {
+            ballPlays = (result.live_commentary || []).filter((c: any) => 
+                ['dot', 'runs', 'four', 'six', 'wicket'].includes(c.type) || 
+                (c.over && c.ball && (c.ball.includes('runs') || c.ball.includes('FOUR') || c.ball.includes('SIX') || c.ball.includes('OUT')))
+            );
+        }
+
         result.last_balls = ballPlays.slice(0, 12).map((c: any) => ({
-            value: c.type === 'wicket' ? 'W' : (c.runs === 0 ? '0' : String(c.runs || '0')),
-            is_wicket: c.type === 'wicket',
+            value: c.type === 'wicket' ? 'W' : (c.type === 'four' ? '4' : (c.type === 'six' ? '6' : (c.runs === 0 ? '0' : String(c.runs || '0')))),
+            is_wicket: c.type === 'wicket' || (c.ball && c.ball.includes('OUT')),
             timestamp: new Date().toISOString(),
             over: c.over
         })).reverse();
@@ -361,14 +370,14 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         const battingTeamIdForRoster = isBattingA ? team1.team?.id : (isBattingB ? team2.team?.id : null);
         const bowlingTeamIdForRoster = isBattingA ? team2.team?.id : (isBattingB ? team1.team?.id : null);
 
-        // Try situation data first (sometimes populated)
+        // Try situation data first
         if (situ?.batter1) {
             result.batters.push({
                 name: situ.batter1.athlete?.displayName || 'Batter 1',
                 runs: situ.batter1.runs || 0,
                 balls: situ.batter1.balls || 0,
                 fours: 0, sixes: 0,
-                strikeRate: (situ.batter1.runs / (situ.batter1.balls || 1)) * 100,
+                strikeRate: (situ.batter1.runs / Math.max(1, situ.batter1.balls || 0)) * 100,
                 isBatting: true
             });
         }
@@ -378,38 +387,33 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 runs: situ.batter2.runs || 0,
                 balls: situ.batter2.balls || 0,
                 fours: 0, sixes: 0,
-                strikeRate: (situ.batter2.runs / (situ.batter2.balls || 1)) * 100,
+                strikeRate: (situ.batter2.runs / Math.max(1, situ.batter2.balls || 0)) * 100,
                 isBatting: false
             });
         }
 
-        // Fallback: Extract active batters from ANY team roster if designated batting team has players with batted=1, dismissal=0
+        // Fallback: Ultra-Aggressive search in ALL rosters for anyone with batted=1 and no outDetails
         if (result.batters.length === 0) {
             rosters.forEach((roster: any) => {
-                (roster.roster || []).forEach((player: any) => {
-                    const innerLs = player.linescores?.[0]?.linescores?.[0] || player.linescores?.[0];
-                    if (!innerLs) return;
-                    // Check if player is currently batting (has inner statistics or batting stats)
-                    const stats = innerLs.statistics?.categories?.[0]?.stats || innerLs.statistics?.batting?.stats;
-                    if (!stats) return;
-
-                    const getStatVal = (name: string) => {
-                        const s = stats.find ? stats.find((st: any) => st.name === name) : null;
-                        return s ? Number(s.value) : 0;
-                    };
+                (roster.roster || []).forEach((p: any) => {
+                    const stats = p.linescores?.[0]?.linescores?.[0]?.statistics || p.linescores?.[0]?.statistics;
+                    if (!stats || !stats.batting) return;
                     
-                    // On some matches, batted/dismissal isn't in 'categories', it's in a direct list
-                    const isBatted = getStatVal('batted') || (innerLs.statistics?.batting ? 1 : 0);
-                    const isOut = getStatVal('dismissal') || (innerLs.statistics?.batting?.outText ? 1 : 0);
+                    const bat = stats.batting;
+                    const runs = Number(bat.runs || 0);
+                    const balls = Number(bat.ballsFaced || 0);
+                    const sr = Number(bat.strikeRate || 0);
                     
-                    if (isBatted === 1 && isOut === 0) {
+                    // If they have batted and are not out
+                    if (!bat.outDetails && (runs > 0 || balls > 0)) {
                         result.batters.push({
-                            name: player.athlete?.displayName || 'Unknown',
-                            runs: getStatVal('runs') || Number(innerLs.statistics?.batting?.runs || 0),
-                            balls: getStatVal('ballsFaced') || Number(innerLs.statistics?.batting?.ballsFaced || 0),
-                            fours: getStatVal('fours') || Number(innerLs.statistics?.batting?.fours || 0),
-                            sixes: getStatVal('sixes') || Number(innerLs.statistics?.batting?.sixes || 0),
-                            strikeRate: getStatVal('strikeRate') || Number(innerLs.statistics?.batting?.strikeRate || 0)
+                            name: p.athlete?.displayName || 'Unknown',
+                            runs,
+                            balls,
+                            fours: Number(bat.fours || 0),
+                            sixes: Number(bat.sixes || 0),
+                            strikeRate: sr > 0 ? sr : (runs / Math.max(1, balls)) * 100,
+                            isBatting: result.batters.length === 0
                         });
                     }
                 });
