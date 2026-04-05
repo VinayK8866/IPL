@@ -1,23 +1,25 @@
 const axios = require('axios');
-const fs = require('fs');
 
-const EVENT_ID = '1527678';
-const SERIES_ID = '1510719';
-const HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-};
+const seriesId = '8048';
+const matchId = '1527681';
 
-async function dumpSummary() {
-    console.log(`--- DUMPING SUMMARY JSON (1510719/1527678) ---`);
-    const url = `https://site.api.espn.com/apis/site/v2/sports/cricket/1510719/summary?event=${EVENT_ID}`;
-    try {
-        const res = await axios.get(url, { headers: HEADERS, timeout: 5000 });
-        console.log(`  [SUCCESS] Status: ${res.status}`);
-        fs.writeFileSync('e:/SaaS Apps/IPL/tmp/summary_full.json', JSON.stringify(res.data, null, 2));
-        console.log(`Saved full response to e:/SaaS Apps/IPL/tmp/summary_full.json`);
-    } catch (err) {
-        console.log(`  [FAILED] ${err.message}`);
-    }
+async function dumpEspnSummary() {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${matchId}&t=${Date.now()}`;
+  
+  try {
+    const res = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 10000 });
+    const data = res.data;
+
+    console.log('--- Summary Dump ---');
+    console.log('Status Header:', data.header?.status?.summary);
+    console.log('Plays Length:', data.plays?.length || 0);
+    console.log('First Play:', JSON.stringify(data.plays?.[0] || {}, null, 2));
+    console.log('Notes Length:', data.notes?.length || 0);
+    console.log('First Note:', JSON.stringify(data.notes?.[0] || {}, null, 2));
+
+  } catch (e) {
+    console.log('Failed:', e.message);
+  }
 }
 
-dumpSummary();
+dumpEspnSummary();
