@@ -1,5 +1,22 @@
 import { NextResponse, NextRequest } from 'next/server';
 import axios from 'axios';
+import { generateLiveNarration } from '@/lib/gemini/narrator';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
+
+const ESPN_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json',
+    'Origin': 'https://www.espncricinfo.com',
+    'Referer': 'https://www.espncricinfo.com/'
+};
+
+// In-memory cache for narration to save API credits
+const narrationCache: Record<string, { text: string, ball: string }> = {};
 
 /**
  * PROJECT CRICKET PULSE - MATCH DETAIL API (Robust v2)
@@ -45,9 +62,26 @@ export async function GET(
             eventId = matchId;
         }
 
-        // Search strategy:
-        // 1. Try the series ID provided in the URL first
-        // 2. Fallback to searching all other known SERIES_IDS
+        // SEARCH STRATEGY: 
+        // If we have both IDs, hit the target immediately for extreme speed.
+        if (seriesIdFromUrl && eventId) {
+            try {
+                // Fetch Scoreboard (for base status) and Summary (for rich data) in parallel
+                const scoreboardUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesIdFromUrl}/scoreboard?t=${Date.now()}`;
+                const res = await axios.get(scoreboardUrl, { headers: ESPN_HEADERS, timeout: 5000 });
+                const events = res.data.events || [];
+                const foundEvent = events.find((e: any) => String(e.id) === String(eventId));
+
+                if (foundEvent) {
+                    const seriesName = res.data.leagues?.[0]?.name || 'Cricket';
+                    const data = await buildEnrichedMatchScore(foundEvent, seriesIdFromUrl, eventId, seriesName);
+                    return NextResponse.json(data);
+                }
+            } catch (err) {
+                // Fallback to global search if targeted fetch fails
+            }
+        }
+
         const searchQueue = seriesIdFromUrl ? [seriesIdFromUrl, ...SERIES_IDS.filter(s => s !== seriesIdFromUrl)] : SERIES_IDS;
 
         for (const seriesId of searchQueue) {
@@ -226,14 +260,6 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         }
 
         // Add a 'Telemetry Update' if the match is live — ensures feed never feels 'stale'
-        if (mappedStatus === 'LIVE') {
-            const rrr = result.is_second_innings ? ((result.target - runsVal) / (Math.max(0.1, (result.over_limit || 20) - oversFloat))).toFixed(2) : '0.00';
-            commentary.push({
-                over: result.overs,
-                ball: `🤖 AI PULSE: Score ${result.score} at ${result.overs} ov. ${result.is_second_innings ? `Req. Rate: ${rrr}` : `Proj. Score: ${result.predicted_score}`}`,
-                type: 'normal'
-            });
-        }
 
         // 1a. Match Notes (powerplays, milestones, reviews, strategic timeouts, innings breaks)
         const notes = summaryData.notes || [];
@@ -347,21 +373,97 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
              console.warn('[API] Recovery fallback: Consumer commentary failed');
         }
 
-        // Sort: most recent events first (higher over number = more recent)
-        commentary.sort((a: any, b: any) => {
+        // === DEDUPLICATION & STABLE ID GENERATION ===
+        const seenBalls = new Set();
+        const finalCommentary: any[] = [];
+        
+        // Priority: Plays (detailed) > Roster Dismissals > Match Notes > Telemetry
+        const sortedByPriority = commentary.sort((a, b) => {
+             const priority = (item: any) => {
+                 if (item.isPlay) return 3;
+                 if (item.ball.includes('OUT!')) return 2;
+                 if (item.type === 'milestone') return 1;
+                 return 0;
+             };
+             return priority(b) - priority(a);
+        });
+
+        sortedByPriority.forEach(item => {
+            const ballKey = `${item.over}-${item.isPlay ? 'play' : 'note'}`;
+            // For plays, we only want one entry per specific ball (e.g. 15.4)
+            if (item.isPlay) {
+                if (seenBalls.has(item.over)) return;
+                seenBalls.add(item.over);
+            }
+            
+            // Generate a stable ID based on content to prevent UI flicker
+            const contentHash = Buffer.from(item.ball).toString('base64').substring(0, 8);
+            item.id = `${item.over}-${contentHash}`;
+            finalCommentary.push(item);
+        });
+
+        // Re-sort by over descending for display
+        finalCommentary.sort((a: any, b: any) => {
             const ovA = parseFloat(a.over) || 0;
             const ovB = parseFloat(b.over) || 0;
             return ovB - ovA;
         });
 
-        // Add the current match status as the top commentary line
-        commentary.unshift({
-            over: result.overs,
-            ball: `📡 ${summaryText}`,
-            type: 'status'
-        });
+        // === AI LIVE NARRATION with Persistent Cooldown ===
+        if (mappedStatus === 'LIVE') {
+            const lastBall = result.overs;
+            const cacheKey = result.match_id;
+            const now = Date.now();
+            
+            // 60-second cooldown per match to prevent Gemini rate-limiting and response lag
+            const lastNarrationTime = (global as any)._narrationTimestamps?.[cacheKey] || 0;
+            const hasCooldown = (now - lastNarrationTime) < 60000;
 
-        result.live_commentary = commentary.slice(0, 20);
+            if (!narrationCache[cacheKey] || (narrationCache[cacheKey].ball !== lastBall && !hasCooldown)) {
+                try {
+                    const recentSlice = finalCommentary.slice(0, 5);
+                    const aiNarrative = await generateLiveNarration(result, recentSlice);
+                    narrationCache[cacheKey] = { text: aiNarrative, ball: lastBall };
+                    
+                    // Update global state tracking
+                    if (!(global as any)._narrationTimestamps) (global as any)._narrationTimestamps = {};
+                    (global as any)._narrationTimestamps[cacheKey] = now;
+                } catch (e) {
+                    console.warn('[AI] Narration step failed');
+                }
+            }
+
+            if (narrationCache[cacheKey]) {
+                finalCommentary.unshift({
+                    id: `ai-pulse-${result.match_id}-${lastBall}`,
+                    over: narrationCache[cacheKey].ball,
+                    ball: `🤖 ${narrationCache[cacheKey].text}`,
+                    type: 'normal'
+                });
+            }
+        }
+
+        result.live_commentary = finalCommentary.slice(0, 20);
+
+        // SYNC TO SUPABASE (Persistence allows dashboard and workers to share state)
+        if (supabase) {
+            try {
+                await supabase.from('matches').upsert({
+                    id: result.match_id,
+                    team_a: result.team_a,
+                    team_b: result.team_b,
+                    score: result.score,
+                    overs: result.overs,
+                    status: result.status.toLowerCase(),
+                    live_commentary: result.live_commentary,
+                    win_prob_a: result.win_prob_a,
+                    win_prob_b: result.win_prob_b,
+                    current_momentum_json: { history: [result.win_prob_a], last_ball: result.overs }
+                });
+            } catch (e) {
+                console.warn('[Supabase] Sync failed in API route');
+            }
+        }
 
         // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
         // STRATEGY: Only use verified ball-by-ball plays (isPlay: true). 

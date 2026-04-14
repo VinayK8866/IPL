@@ -71,9 +71,9 @@ export default function AINarrator({ matchId }: { matchId: string }) {
 
         <AnimatePresence mode="popLayout">
           {commentary.length > 0 ? (
-            commentary.map((item: Commentary, idx: number) => (
+            commentary.map((item: any, idx: number) => (
               <motion.div
-                key={`${item.over}-${idx}`}
+                key={item.id || `${item.over}-${idx}`}
                 initial={{ opacity: 0, x: -20, filter: 'blur(10px)' }}
                 animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
                 transition={{ duration: 0.5, delay: idx * 0.1 }}

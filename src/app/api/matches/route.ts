@@ -265,11 +265,33 @@ export async function GET(request: Request) {
                     }
 
                     // Sort by over descending and deduplicate
-                    matchObj.live_commentary = commentary
-                        .sort((a: any, b: any) => parseFloat(b.over || '0') - parseFloat(a.over || '0'))
-                        .slice(0, 20);
+                    // DEDUPLICATION & STABLE ID GENERATION
+                    const seenBalls = new Set();
+                    const finalCommentary: any[] = [];
+                    const sortedByPriority = commentary.sort((a, b) => {
+                         const priority = (item: any) => {
+                             if (item.runs !== undefined) return 3;
+                             if (item.ball.includes('OUT!')) return 2;
+                             return 0;
+                         };
+                         return priority(b) - priority(a);
+                    });
 
-                    matchObj.last_balls = commentary.filter((c: any) => c.runs !== undefined).slice(0, 6).map((c: any, idx: number) => ({
+                    sortedByPriority.forEach(item => {
+                        if (item.runs !== undefined) {
+                            if (seenBalls.has(item.over)) return;
+                            seenBalls.add(item.over);
+                        }
+                        const contentHash = Buffer.from(item.ball).toString('base64').substring(0, 8);
+                        item.id = `${item.over}-${contentHash}`;
+                        finalCommentary.push(item);
+                    });
+
+                    matchObj.live_commentary = finalCommentary
+                        .sort((a: any, b: any) => parseFloat(b.over || '0') - parseFloat(a.over || '0'))
+                        .slice(0, 15);
+
+                    matchObj.last_balls = finalCommentary.filter((c: any) => c.runs !== undefined).slice(0, 6).map((c: any, idx: number) => ({
                         runs: c.type === 'four' ? 4 : (c.type === 'six' ? 6 : (c.runs || 0)),
                         outcome: c.type
                     }));
