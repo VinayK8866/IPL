@@ -35,9 +35,19 @@ export default function AINarrator({ matchId }: { matchId: string }) {
             Autonomous Commentary <span className="text-[#FF3366]">v4.2</span>
           </span>
         </div>
-        <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 bg-[#00FF94] rounded-full animate-pulse shadow-[0_0_8px_#00FF94]" />
-            <span className="text-[8px] font-black text-[#00FF94] uppercase tracking-widest">Live Stream Synced</span>
+        <div className="flex items-center gap-3">
+            <a 
+              href={`https://www.google.com/search?q=${encodeURIComponent(matchId?.replace('-', ' ') || 'IPL')} live commentary`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[8px] font-black text-[#7A3FE1] hover:text-white uppercase tracking-widest border border-[#7A3FE1]/30 px-2 py-0.5 rounded transition-all italic"
+            >
+              Verify ↗
+            </a>
+            <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-[#00FF94] rounded-full animate-pulse shadow-[0_0_8px_#00FF94]" />
+                <span className="text-[8px] font-black text-[#00FF94] uppercase tracking-widest">Live Stream Synced</span>
+            </div>
         </div>
       </div>
 

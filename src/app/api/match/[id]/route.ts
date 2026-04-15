@@ -375,6 +375,41 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             }
         }
 
+        // === FINAL GOOGLE SCRAPER FALLBACK (High-Intensity 'Jugaad' Mode) ===
+        // If we still have NO granular plays (only notes/telemetry), try to scrape Google search results 
+        // for the match commentary as requested by the user.
+        if (commentary.filter(c => c.isPlay).length === 0) {
+            try {
+                const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary`);
+                const googleUrl = `https://www.google.com/search?q=${query}`;
+                const googleRes = await axios.get(googleUrl, { 
+                    headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' }, 
+                    timeout: 4000 
+                });
+                const html = googleRes.data;
+                
+                // Regex search for over numbers and following text in the mobile view
+                // We search for patterns like "13.2" followed by descriptive text
+                const overMatches = [...html.matchAll(/(\d+\.\d+)\s*<\/span>.*?<div.*?>\s*([\s\S]*?)\s*<\/div>/gs)];
+                
+                overMatches.forEach(m => {
+                    const overVal = m[1];
+                    const rawText = m[2].replace(/<[^>]*>?/gm, '').trim();
+                    
+                    if (rawText && rawText.length > 5 && !rawText.includes('Match Progress')) {
+                        commentary.push({
+                            over: overVal,
+                            ball: `🌐 [Google] ${rawText.substring(0, 200)}`,
+                            type: rawText.toLowerCase().includes('out!') ? 'wicket' : 'normal',
+                            isPlay: true
+                        });
+                    }
+                });
+            } catch (e) {
+                console.warn('[Google] Scrape fallback failed');
+            }
+        }
+
         // === DEDUPLICATION & STABLE ID GENERATION ===
         const seenBalls = new Set();
         const finalCommentary: any[] = [];
