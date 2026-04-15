@@ -327,7 +327,6 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                     else if (c.isSix || (c.isBoundary && runs === 6)) type = 'six';
                     else if (runs === 0) type = 'dot';
                     else if (runs > 0) type = 'runs';
-
                     commentary.push({
                         over: String(c.overActual || c.overNumber || '0'),
                         ball: c.title || c.commentaryText?.substring(0, 100) || '',
@@ -335,6 +334,8 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                         runs: runs,
                         isPlay: true
                     });
+                });
+            }
         } catch (err) {
              console.warn('[API] Recovery fallback: Consumer commentary failed');
         }
