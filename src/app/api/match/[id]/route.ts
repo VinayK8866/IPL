@@ -335,15 +335,22 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                         runs: runs,
                         isPlay: true
                     });
-                });
-            } else {
-                // Secondary Fallback: Ball-by-ball plays (original site API)
-                const plays = summaryData.plays || [];
-                (plays || []).slice(0, 10).forEach((p: any) => {
+        } catch (err) {
+             console.warn('[API] Recovery fallback: Consumer commentary failed');
+        }
+
+        // Secondary Fallback: Ball-by-ball plays from summaryData (if primary failed or empty)
+        if (commentary.filter(c => c.isPlay).length === 0) {
+            const plays = summaryData.plays || {};
+            const playArray = Array.isArray(plays) ? plays : Object.values(plays);
+            
+            if (playArray.length > 0) {
+                playArray.sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0))
+                .slice(0, 15)
+                .forEach((p: any) => {
                     let type = 'normal';
                     let scoreVal = (p.scoreValue !== undefined) ? Number(p.scoreValue) : (p.runs !== undefined ? Number(p.runs) : 0);
                     
-                    // Fallback to title parsing
                     if (scoreVal === 0 && p.title) {
                         const runMatch = p.title.match(/^(\d+)\s+run/i);
                         if (runMatch) scoreVal = parseInt(runMatch[1]);
@@ -358,16 +365,14 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                     else if (scoreVal > 0) type = 'runs';
 
                     commentary.push({
-                        over: p.over?.number || '0',
-                        ball: `${p.over?.ball || '0'}: ${p.title || p.text || ''}`,
+                        over: p.over?.number !== undefined ? `${p.over.number}.${p.over.ball || 0}` : (p.over?.label || '0'),
+                        ball: p.title || p.text || '',
                         type: type,
                         runs: scoreVal,
                         isPlay: true
                     });
                 });
             }
-        } catch (err) {
-             console.warn('[API] Recovery fallback: Consumer commentary failed');
         }
 
         // === DEDUPLICATION & STABLE ID GENERATION ===
