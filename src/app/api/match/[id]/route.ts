@@ -306,12 +306,14 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
 
         // 1c. Ball-by-ball plays (Unified High-Performance Consumer API + Fallback)
         try {
-            const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${eventId}&sortDirection=DESC`;
-            const commentaryV1Res = await axios.get(commentaryV1Url, { headers: ESPN_HEADERS, timeout: 5000 });
+            // DETECT CURRENT INNINGS
+            const currentInnings = summaryData.match?.status === 'live' ? (summaryData.match?.currentInnings || 1) : 1;
+            const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${eventId}&sortDirection=DESC&innings=${currentInnings}`;
+            const commentaryV1Res = await axios.get(commentaryV1Url, { headers: ESPN_HEADERS, timeout: 8000 });
             const commentaryV1Data = commentaryV1Res.data;
 
             if (commentaryV1Data?.comments?.length > 0) {
-                commentaryV1Data.comments.slice(0, 15).forEach((c: any) => {
+                commentaryV1Data.comments.slice(0, 20).forEach((c: any) => {
                     let type = 'normal';
                     // Robust run extraction
                     let runs = (c.runs !== undefined) ? Number(c.runs) : (c.scoreValue !== undefined ? Number(c.scoreValue) : 0);
@@ -379,9 +381,14 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         // === FINAL GOOGLE SCRAPER FALLBACK (High-Intensity 'Jugaad' Mode) ===
         // If we still have NO granular plays (only notes/telemetry), try to scrape Google search results 
         // for the match commentary as requested by the user.
-        if (commentary.filter(c => c.isPlay).length === 0) {
+        // === FINAL GOOGLE SCRAPER FALLBACK (High-Intensity 'Jugaad' Mode) ===
+        // If we still have NO granular plays (only notes/telemetry), try to scrape Google search results 
+        // for the match commentary as requested by the user.
+        if (commentary.filter(c => c.isPlay).length < 5) {
             try {
-                const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary`);
+                // Determine current over for query accuracy
+                const currentOverStr = commentary.find(c => c.over)?.over || result.overs || '0.0';
+                const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary ${currentOverStr}`);
                 const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}&random=${Math.random()}`;
                 const googleRes = await axios.get(googleUrl, { 
                     headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' }, 
