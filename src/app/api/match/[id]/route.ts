@@ -26,9 +26,6 @@ const narrationCache: Record<string, { text: string, ball: string }> = {};
  */
 
 const SERIES_IDS = ['1510719', '8048', '1527930', '1508731'];
-const ESPN_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-};
 
 function parseOvers(ovStr: string): number {
     if (!ovStr) return 0;
