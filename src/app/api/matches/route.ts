@@ -226,12 +226,14 @@ export async function GET(request: Request) {
                         });
                     });
 
-                    // 1c. Ball-by-ball from hs-consumer-api (may fail with 403)
+                    // 1c. Ball-by-ball from hs-consumer-api (innings-aware)
                     try {
-                        const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${event.id}&sortDirection=DESC`;
-                        const commentaryV1Res = await axios.get(commentaryV1Url, { timeout: 3000 });
+                        // Detect current innings from the summary data
+                        const numInnings = summaryData.scorecards?.length || 1;
+                        const commentaryV1Url = `https://hs-consumer-api.espncricinfo.com/v1/pages/match/commentary?lang=en&seriesId=${seriesId}&matchId=${event.id}&sortDirection=DESC&innings=${numInnings}`;
+                        const commentaryV1Res = await axios.get(commentaryV1Url, { timeout: 5000 });
                         const comments = commentaryV1Res.data?.comments || [];
-                        comments.slice(0, 15).forEach((c: any) => {
+                        comments.slice(0, 20).forEach((c: any) => {
                             let type = 'normal';
                             const runs = c.runs || 0;
                             if (c.isWicket) type = 'wicket';
@@ -241,27 +243,61 @@ export async function GET(request: Request) {
                             else if (runs > 0) type = 'runs';
                             commentary.push({
                                 over: String(c.overActual || c.overNumber || '0'),
-                                ball: c.title || c.commentaryText?.substring(0, 100) || '',
-                                type, runs
+                                ball: c.title || c.commentaryText?.substring(0, 150) || '',
+                                type, runs,
+                                isPlay: true
                             });
                         });
                     } catch {
                         // Consumer commentary API may be blocked — fallback to plays
-                        const plays = summaryData.plays || [];
-                        (plays).slice(0, 10).forEach((p: any) => {
-                            let type = 'normal';
-                            let scoreVal = p.scoreValue || 0;
-                            if (p.dismissal) type = 'wicket';
-                            else if (scoreVal === 6) type = 'six';
-                            else if (scoreVal === 4) type = 'four';
-                            else if (scoreVal === 0) type = 'dot';
-                            else if (scoreVal > 0) type = 'runs';
-                            commentary.push({
-                                over: p.over?.number || '0',
-                                ball: (p.title || p.text || ''),
-                                type, runs: scoreVal
+                        const plays = summaryData.plays || {};
+                        const playArray = Array.isArray(plays) ? plays : Object.values(plays);
+                        (playArray as any[])
+                            .sort((a: any, b: any) => (b.sequence || 0) - (a.sequence || 0))
+                            .slice(0, 15)
+                            .forEach((p: any) => {
+                                let type = 'normal';
+                                let scoreVal = p.scoreValue || 0;
+                                if (p.dismissal) type = 'wicket';
+                                else if (scoreVal === 6) type = 'six';
+                                else if (scoreVal === 4) type = 'four';
+                                else if (scoreVal === 0) type = 'dot';
+                                else if (scoreVal > 0) type = 'runs';
+                                commentary.push({
+                                    over: p.over?.number !== undefined ? `${p.over.number}.${p.over.ball || 0}` : '0',
+                                    ball: p.title || p.text || '',
+                                    type, runs: scoreVal,
+                                    isPlay: true
+                                });
                             });
-                        });
+                    }
+
+                    // 1d. Google Scraper Fallback — if we still have < 5 ball-by-ball items
+                    if (commentary.filter(c => c.isPlay).length < 5) {
+                        try {
+                            const t1Name = team1.team?.displayName || '';
+                            const t2Name = team2.team?.displayName || '';
+                            const query = encodeURIComponent(`${t1Name} vs ${t2Name} live score commentary`);
+                            const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}`;
+                            const googleRes = await axios.get(googleUrl, {
+                                headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' },
+                                timeout: 4000
+                            });
+                            const html = googleRes.data;
+                            const overMatches = [...html.matchAll(/(\\d+\\.\\d+)\\s*(?:<\\/span>|<\\/div>).*?<(?:div|span)[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:div|span)>/gs)];
+                            overMatches.forEach((m: any) => {
+                                const overVal = m[1];
+                                let rawText = m[2].replace(/<[^>]*>?/gm, ' ').trim().replace(/\\s+/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
+                                if (rawText && rawText.length > 10 && rawText.length < 400) {
+                                    commentary.push({
+                                        over: overVal,
+                                        ball: rawText,
+                                        type: rawText.toLowerCase().includes('out') ? 'wicket' : 'normal',
+                                        isPlay: true
+                                    });
+                                }
+                            });
+                        } catch { /* Google scrape failed silently */ }
                     }
 
                     // Sort by over descending and deduplicate
