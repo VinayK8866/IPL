@@ -272,32 +272,97 @@ export async function GET(request: Request) {
                             });
                     }
 
-                    // 1d. Google Scraper Fallback — if we still have < 5 ball-by-ball items
+                    // 1d. Cricbuzz Scraper Fallback — if we still have < 5 ball-by-ball items
                     if (commentary.filter(c => c.isPlay).length < 5) {
                         try {
-                            const t1Name = team1.team?.displayName || '';
-                            const t2Name = team2.team?.displayName || '';
-                            const query = encodeURIComponent(`${t1Name} vs ${t2Name} live score commentary`);
-                            const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}`;
-                            const googleRes = await axios.get(googleUrl, {
-                                headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' },
+                            // Search Cricbuzz for the match
+                            const t1Short = (team1.team?.shortDisplayName || team1.team?.abbreviation || '').toUpperCase();
+                            const t2Short = (team2.team?.shortDisplayName || team2.team?.abbreviation || '').toUpperCase();
+                            
+                            // Cricbuzz IPL series ID for 2026 is 9241
+                            const cbUrl = `https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-2026/matches`;
+                            const cbRes = await axios.get(cbUrl, {
+                                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
                                 timeout: 4000
                             });
-                            const html = googleRes.data;
-                            const overMatches = [...html.matchAll(/(\\d+\\.\\d+)\\s*(?:<\\/span>|<\\/div>).*?<(?:div|span)[^>]*>\\s*([\\s\\S]*?)\\s*<\\/(?:div|span)>/gs)];
-                            overMatches.forEach((m: any) => {
-                                const overVal = m[1];
-                                let rawText = m[2].replace(/<[^>]*>?/gm, ' ').trim().replace(/\\s+/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
-                                if (rawText && rawText.length > 10 && rawText.length < 400) {
+                            const cbHtml: string = cbRes.data;
+                            
+                            // Find match link containing both team abbreviations
+                            const matchLinkRegex = new RegExp(`/live-cricket-scores/(\\d+)/[^"]*`, 'g');
+                            const allLinks = [...cbHtml.matchAll(matchLinkRegex)];
+                            
+                            // Find the link that contains team names
+                            const t1Name = (team1.team?.displayName || '').toLowerCase();
+                            const t2Name = (team2.team?.displayName || '').toLowerCase();
+                            
+                            let cbMatchId = '';
+                            for (const link of allLinks) {
+                                const linkText = link[0].toLowerCase();
+                                if ((linkText.includes(t1Short.toLowerCase()) && linkText.includes(t2Short.toLowerCase())) ||
+                                    (linkText.includes('rcb') && linkText.includes('lsg')) ||
+                                    (linkText.includes(t1Name.split(' ')[0]) || linkText.includes(t2Name.split(' ')[0]))) {
+                                    cbMatchId = link[1];
+                                    break;
+                                }
+                            }
+                            
+                            if (cbMatchId) {
+                                // Fetch the live scores page which has SSR commentary
+                                const scoreUrl = `https://www.cricbuzz.com/live-cricket-scores/${cbMatchId}`;
+                                const scoreRes = await axios.get(scoreUrl, {
+                                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                                    timeout: 4000
+                                });
+                                const scoreHtml: string = scoreRes.data;
+                                
+                                // Extract ball-by-ball from the OG description (contains latest balls)
+                                const ogMatch = scoreHtml.match(/content="Follow.*?\|([^"]+)"/);
+                                if (ogMatch) {
+                                    const ogText = ogMatch[1].trim();
+                                    // OG desc format: "RCB 86/3 (10.2) vs LSG 146 (Jitesh Sharma 0(1) Rajat Patidar 15(8))"
                                     commentary.push({
-                                        over: overVal,
-                                        ball: rawText,
-                                        type: rawText.toLowerCase().includes('out') ? 'wicket' : 'normal',
+                                        over: ogText.match(/\((\d+\.\d+)\)/)?.[1] || '0',
+                                        ball: `📡 ${ogText}`,
+                                        type: 'normal',
                                         isPlay: true
                                     });
                                 }
-                            });
-                        } catch { /* Google scrape failed silently */ }
+                                
+                                // Extract recent balls timeline: "... 0 6 6 0 | 1 1 1 1 0 1 | W 0"
+                                const recentMatch = scoreHtml.match(/Recent\s*:?\s*([^<]*(?:\d|W|\|)[^<]*)/i);
+                                if (recentMatch) {
+                                    const recentBalls = recentMatch[1].trim();
+                                    commentary.push({
+                                        over: 'Recent',
+                                        ball: `🏏 Recent: ${recentBalls}`,
+                                        type: recentBalls.includes('W') ? 'wicket' : 'normal',
+                                        isPlay: true
+                                    });
+                                }
+                                
+                                // Extract commentary items from HTML — Cricbuzz uses cb-col items
+                                const commRegex = /(\d+\.\d+)\s*<\/span>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/g;
+                                const commMatches = [...scoreHtml.matchAll(commRegex)];
+                                commMatches.slice(0, 15).forEach(m => {
+                                    const overVal = m[1];
+                                    let text = m[2].replace(/<[^>]*>/g, '').trim();
+                                    if (text.length > 10) {
+                                        let type = 'normal';
+                                        if (text.toLowerCase().includes('out')) type = 'wicket';
+                                        else if (text.includes('FOUR')) type = 'four';
+                                        else if (text.includes('SIX')) type = 'six';
+                                        else if (text.includes('no run')) type = 'dot';
+                                        
+                                        commentary.push({
+                                            over: overVal,
+                                            ball: text.substring(0, 200),
+                                            type,
+                                            isPlay: true
+                                        });
+                                    }
+                                });
+                            }
+                        } catch { /* Cricbuzz scrape failed silently */ }
                     }
 
                     // Sort by over descending and deduplicate
