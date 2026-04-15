@@ -190,6 +190,69 @@ export async function GET(request: Request) {
                     // 1. Commentary from multiple sources
                     const commentary: any[] = [];
                     const rosters = summaryData.rosters || [];
+                    
+                    // 1-PRIORITY: Generate live situation commentary from current match state
+                    // This ensures we ALWAYS have up-to-date commentary even when APIs fail
+                    const situation = summaryData.situation;
+                    if (situation) {
+                        const currentOvers = situation.lastBattingTeam?.overs || matchObj.teamA.overs || '0';
+                        
+                        // Current partnership info
+                        if (situation.batter1) {
+                            const b1 = situation.batter1;
+                            const b1Name = b1.athlete?.displayName || 'Batter 1';
+                            commentary.push({
+                                over: currentOvers,
+                                ball: `🏏 ${b1Name}: ${b1.runs || 0}(${b1.balls || 0}) | SR: ${((b1.runs || 0) / (b1.balls || 1) * 100).toFixed(1)}`,
+                                type: 'normal',
+                                isPlay: true
+                            });
+                        }
+                        if (situation.batter2) {
+                            const b2 = situation.batter2;
+                            const b2Name = b2.athlete?.displayName || 'Batter 2';
+                            commentary.push({
+                                over: currentOvers,
+                                ball: `🏏 ${b2Name}: ${b2.runs || 0}(${b2.balls || 0}) | SR: ${((b2.runs || 0) / (b2.balls || 1) * 100).toFixed(1)}`,
+                                type: 'normal',
+                                isPlay: true
+                            });
+                        }
+                        if (situation.bowler1) {
+                            const bw = situation.bowler1;
+                            const bwName = bw.athlete?.displayName || 'Bowler';
+                            commentary.push({
+                                over: currentOvers,
+                                ball: `⚡ Bowling: ${bwName} ${bw.overs || 0}-${bw.maidens || 0}-${bw.conceded || 0}-${bw.wickets || 0}`,
+                                type: 'normal',
+                                isPlay: true
+                            });
+                        }
+                        // Required rate
+                        if (situation.lastBattingTeam?.remainingRuns) {
+                            const remRuns = situation.lastBattingTeam.remainingRuns;
+                            const remBalls = situation.lastBattingTeam.remainingBalls || 1;
+                            const rrr = (remRuns / (remBalls / 6)).toFixed(2);
+                            commentary.push({
+                                over: currentOvers,
+                                ball: `📊 Need ${remRuns} from ${remBalls} balls. Required Rate: ${rrr}`,
+                                type: 'milestone',
+                                isPlay: true
+                            });
+                        }
+                        // Recent overs from situation
+                        if (situation.recentOvers) {
+                            const recentStr = situation.recentOvers.map((o: any) => `${o.over}: ${(o.runs || []).join(' ')}`).join(' | ');
+                            if (recentStr) {
+                                commentary.push({
+                                    over: currentOvers,
+                                    ball: `📋 Recent: ${recentStr}`,
+                                    type: 'normal',
+                                    isPlay: true
+                                });
+                            }
+                        }
+                    }
 
                     // 1a. Match Notes (milestones, strategic timeouts, reviews, powerplays)
                     const notes = summaryData.notes || [];
