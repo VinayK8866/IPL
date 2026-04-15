@@ -27,27 +27,28 @@ export default function AINarrator({ matchId }: { matchId: string }) {
       <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#7A3FE1] to-transparent" />
       <div className="absolute bottom-0 right-0 w-16 h-16 bg-[#FF3366]/5 blur-3xl rounded-full" />
 
-      {/* Header */}
-      <div className="flex justify-between items-center p-3 border-b border-white/5 bg-[#1A1F29]/20">
-        <div className="flex items-center gap-2">
-          <Terminal size={14} className="text-[#7A3FE1]" />
-          <span className="text-[10px] font-black text-white tracking-[0.3em] uppercase italic">
-            Autonomous Commentary <span className="text-[#FF3366]">v4.3</span>
-          </span>
+      <div className="flex flex-col p-3 border-b border-white/5 bg-[#1A1F29]/40 gap-2">
+        <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Terminal size={14} className="text-[#7A3FE1]" />
+              <span className="text-[10px] font-black text-white tracking-[0.3em] uppercase italic">
+                Autonomous Commentary <span className="text-[#FF3366]">v4.3</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-[#00FF94] rounded-full animate-pulse shadow-[0_0_8px_#00FF94]" />
+                <span className="text-[8px] font-black text-[#00FF94] uppercase tracking-widest">Synced</span>
+            </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex justify-start">
             <a 
               href={`https://www.google.com/search?q=${encodeURIComponent(matchId?.replace('-', ' ') || 'IPL')} live commentary`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[8px] font-black text-[#7A3FE1] hover:text-white uppercase tracking-widest border border-[#7A3FE1]/30 px-2 py-0.5 rounded transition-all italic"
+              className="text-[8px] font-black text-[#7A3FE1] hover:text-white uppercase tracking-[0.2em] border border-[#7A3FE1]/30 px-3 py-1 rounded transition-all italic bg-[#7A3FE1]/5"
             >
-              Verify ↗
+              Verify Real-Time Data on Google ↗
             </a>
-            <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-[#00FF94] rounded-full animate-pulse shadow-[0_0_8px_#00FF94]" />
-                <span className="text-[8px] font-black text-[#00FF94] uppercase tracking-widest">Live Stream Synced</span>
-            </div>
         </div>
       </div>
 

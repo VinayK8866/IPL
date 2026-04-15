@@ -389,21 +389,21 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 });
                 const html = googleRes.data;
                 
-                // Regex search for over numbers and following text in the mobile view
-                // We search for patterns like "13.2" followed by descriptive text
-                const overMatches = [...html.matchAll(/(\d+\.\d+)\s*<\/span>.*?<div.*?>\s*([\s\S]*?)\s*<\/div>/gs)];
+                // Regex search for over numbers and following text (Ultra-Robust version)
+                // This targets the over number span and any following block that contains the ball text.
+                const overMatches = [...html.matchAll(/(\d+\.\d+)\s*(?:<\/span>|).*?<\w+.*?>\s*([\s\S]*?)\s*<\/\w+>/gs)];
                 
                 overMatches.forEach(m => {
                     const overVal = m[1];
-                    let rawText = m[2].replace(/<[^>]*>?/gm, '').trim();
+                    let rawText = m[2].replace(/<[^>]*>?/gm, ' ').trim();
                     
-                    // Ultra-aggressive cleanup of Google-specific markup
-                    rawText = rawText.replace(/\s+/g, ' ').replace(/&nbsp;/g, ' ');
+                    // Cleanup of Google-specific markup and noise
+                    rawText = rawText.replace(/\s+/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
 
-                    if (rawText && rawText.length > 5 && !rawText.includes('Match Progress')) {
+                    if (rawText && rawText.length > 5 && rawText.length < 500 && !rawText.includes('Match Progress')) {
                         commentary.push({
                             over: overVal,
-                            ball: `🌐 [PULSE-G] ${rawText.substring(0, 200)}`,
+                            ball: `🌐 [PULSE-G] ${rawText}`,
                             type: (rawText.toLowerCase().includes('out!') || rawText.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
                             isPlay: true
                         });
