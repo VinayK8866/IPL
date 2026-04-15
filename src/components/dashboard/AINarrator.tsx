@@ -32,7 +32,7 @@ export default function AINarrator({ matchId }: { matchId: string }) {
         <div className="flex items-center gap-2">
           <Terminal size={14} className="text-[#7A3FE1]" />
           <span className="text-[10px] font-black text-white tracking-[0.3em] uppercase italic">
-            Autonomous Commentary <span className="text-[#FF3366]">v4.2</span>
+            Autonomous Commentary <span className="text-[#FF3366]">v4.3</span>
           </span>
         </div>
         <div className="flex items-center gap-3">

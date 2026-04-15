@@ -381,10 +381,10 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         if (commentary.filter(c => c.isPlay).length === 0) {
             try {
                 const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary`);
-                const googleUrl = `https://www.google.com/search?q=${query}`;
+                const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}&random=${Math.random()}`;
                 const googleRes = await axios.get(googleUrl, { 
                     headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' }, 
-                    timeout: 4000 
+                    timeout: 5000 
                 });
                 const html = googleRes.data;
                 
@@ -394,13 +394,16 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 
                 overMatches.forEach(m => {
                     const overVal = m[1];
-                    const rawText = m[2].replace(/<[^>]*>?/gm, '').trim();
+                    let rawText = m[2].replace(/<[^>]*>?/gm, '').trim();
                     
+                    // Ultra-aggressive cleanup of Google-specific markup
+                    rawText = rawText.replace(/\s+/g, ' ').replace(/&nbsp;/g, ' ');
+
                     if (rawText && rawText.length > 5 && !rawText.includes('Match Progress')) {
                         commentary.push({
                             over: overVal,
-                            ball: `🌐 [Google] ${rawText.substring(0, 200)}`,
-                            type: rawText.toLowerCase().includes('out!') ? 'wicket' : 'normal',
+                            ball: `🌐 [PULSE-G] ${rawText.substring(0, 200)}`,
+                            type: (rawText.toLowerCase().includes('out!') || rawText.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
                             isPlay: true
                         });
                     }
