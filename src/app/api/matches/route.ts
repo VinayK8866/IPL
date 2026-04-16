@@ -381,26 +381,34 @@ export async function GET(request: Request) {
                                 // Extract ball-by-ball from the OG description (contains latest balls)
                                 const ogMatch = scoreHtml.match(/content="Follow.*?\|([^"]+)"/);
                                 if (ogMatch) {
-                                    const ogText = ogMatch[1].trim();
-                                    // OG desc format: "RCB 86/3 (10.2) vs LSG 146 (Jitesh Sharma 0(1) Rajat Patidar 15(8))"
-                                    commentary.push({
-                                        over: ogText.match(/\((\d+\.\d+)\)/)?.[1] || '0',
-                                        ball: `📡 ${ogText}`,
-                                        type: 'normal',
-                                        isPlay: true
-                                    });
+                                    let ogText = ogMatch[1].trim();
+                                    // Strip Cricbuzz boilerplate after the score/batter info
+                                    ogText = ogText.replace(/\|.*$/s, '').trim();
+                                    ogText = ogText.replace(/live with live scores.*$/si, '').trim();
+                                    ogText = ogText.replace(/on Cricbuzz.*$/si, '').trim();
+                                    if (ogText.length > 10) {
+                                        commentary.push({
+                                            over: ogText.match(/\((\d+\.\d+)\)/)?.[1] || '0',
+                                            ball: `📡 ${ogText}`,
+                                            type: 'normal',
+                                            isPlay: true
+                                        });
+                                    }
                                 }
                                 
                                 // Extract recent balls timeline: "... 0 6 6 0 | 1 1 1 1 0 1 | W 0"
-                                const recentMatch = scoreHtml.match(/Recent\s*:?\s*([^<]*(?:\d|W|\|)[^<]*)/i);
+                                // Only match short ball-outcome strings (numbers, W, |, dots, spaces) — max ~80 chars
+                                const recentMatch = scoreHtml.match(/Recent\s*:?\s*([\d\sW|.]{5,80})/i);
                                 if (recentMatch) {
                                     const recentBalls = recentMatch[1].trim();
-                                    commentary.push({
-                                        over: 'Recent',
-                                        ball: `🏏 Recent: ${recentBalls}`,
-                                        type: recentBalls.includes('W') ? 'wicket' : 'normal',
-                                        isPlay: true
-                                    });
+                                    if (recentBalls.length > 3 && recentBalls.length < 100) {
+                                        commentary.push({
+                                            over: 'Recent',
+                                            ball: `🏏 Recent: ${recentBalls}`,
+                                            type: recentBalls.includes('W') ? 'wicket' : 'normal',
+                                            isPlay: true
+                                        });
+                                    }
                                 }
                                 
                                 // Extract commentary items from HTML — Cricbuzz uses cb-col items
