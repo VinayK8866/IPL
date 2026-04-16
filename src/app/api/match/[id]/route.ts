@@ -378,112 +378,104 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             }
         }
 
-        // === 1d. CRICBUZZ SCRAPER FALLBACK (High-Intensity Sync v3) ===
+        // === 1d. CRICBUZZ SCRAPER FALLBACK (Modular Overhaul v4) ===
         if (commentary.filter(c => c.isPlay).length < 5) {
             try {
-                // Team identification: Try everything from full names to abbreviations
-                const t1 = result.team_a.toLowerCase();
-                const t2 = result.team_b.slice(0, 5).toLowerCase();
                 const abbrev1 = team1.team?.abbreviation?.toLowerCase() || '';
                 const abbrev2 = team2.team?.abbreviation?.toLowerCase() || '';
                 const short1 = team1.team?.shortDisplayName?.toLowerCase() || '';
                 const short2 = team2.team?.shortDisplayName?.toLowerCase() || '';
                 
+                // Cricbuzz IPL 2026 matches list
                 const cbListUrl = `https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-2026/matches`;
                 const cbListRes = await axios.get(cbListUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
                     timeout: 4000
                 });
                 const cbHtml: string = cbListRes.data;
                 
-                // Match identification logic: Check for abbreviations or short names in the URL
                 const matchLinkRegex = new RegExp(`/live-cricket-scores/(\\d+)/[\\w-]+`, 'g');
                 const allLinks = [...cbHtml.matchAll(matchLinkRegex)];
                 let cbMatchId = '';
                 
                 for (const link of allLinks) {
-                    const linkText = link[0].toLowerCase();
-                    // Match if both team identifiers are present in the link (e.g. mi-vs-pbks)
-                    const match1 = (abbrev1 && linkText.includes(abbrev1)) || (short1 && linkText.includes(short1)) || linkText.includes(t1.split(' ')[0]);
-                    const match2 = (abbrev2 && linkText.includes(abbrev2)) || (short2 && linkText.includes(short2)) || linkText.includes(t2.split(' ')[0]);
-                    
-                    if (match1 && match2) {
-                        cbMatchId = link[1];
-                        break;
+                    const l = link[0].toLowerCase();
+                    if ((abbrev1 && l.includes(abbrev1)) || (short1 && l.includes(short1))) {
+                        if ((abbrev2 && l.includes(abbrev2)) || (short2 && l.includes(short2))) {
+                            cbMatchId = link[1];
+                            break;
+                        }
                     }
                 }
                 
                 if (cbMatchId) {
-                    const scoreUrl = `https://www.cricbuzz.com/live-cricket-scores/${cbMatchId}`;
-                    const scoreRes = await axios.get(scoreUrl, {
-                        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                        timeout: 5000
-                    });
-                    const scoreHtml = scoreRes.data;
-                    
-                    // Regex for Cricbuzz's specific HTML structure
-                    const commRegex = /<span class="cb-com-ovr">(\d+\.\d+)<\/span>.*?<p class="cb-com-ln">([\s\S]*?)<\/p>/g;
-                    const commMatches = [...scoreHtml.matchAll(commRegex)];
-                    
-                    commMatches.forEach(m => {
-                        const overVal = m[1];
-                        let text = m[2].replace(/<[^>]*>/g, '').trim();
-                        if (text.length > 5 && !text.includes('Match Progress')) {
-                            commentary.push({
-                                over: overVal,
-                                ball: `🏏 [PULSER-CB] ${text}`,
-                                type: (text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
-                                isPlay: true
-                            });
-                        }
-                    });
+                    // Try both live and full commentary pages for maximum data coverage
+                    const pages = [`live-cricket-scores`, `live-cricket-full-commentary`];
+                    for (const pageType of pages) {
+                        const scoreUrl = `https://www.cricbuzz.com/${pageType}/${cbMatchId}`;
+                        const scoreRes = await axios.get(scoreUrl, {
+                            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                            timeout: 5000
+                        });
+                        const html = scoreRes.data;
+                        
+                        // Pattern 1: Legacy span structure
+                        const p1 = html.matchAll(/<span class="cb-com-ovr">(\d+\.\d+)<\/span>.*?<p class="cb-com-ln">([\s\S]*?)<\/p>/g);
+                        // Pattern 2: New modular flex structure (div based)
+                        const p2 = html.matchAll(/font-bold.*?>(\d+\.\d+)<[\s\S]*?><div>([\s\S]*?)<\/div>/g);
+                        
+                        [...p1, ...p2].forEach(m => {
+                            const overVal = m[1];
+                            let text = m[2].replace(/<[^>]*>/g, '').trim();
+                            if (text.length > 5 && !text.match(/Match Progress|Innings Break|drinks/i)) {
+                                commentary.push({
+                                    over: overVal,
+                                    ball: `🏏 [CRIC-PULSE] ${text}`,
+                                    type: (text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
+                                    isPlay: true
+                                });
+                            }
+                        });
+                        if (commentary.filter(c => c.isPlay).length > 5) break; 
+                    }
                 }
             } catch (e) {
                 console.warn('[Cricbuzz] Scrape fallback failed');
             }
         }
 
-        // === FINAL GOOGLE SCRAPER FALLBACK (Autonomous Overhaul) ===
+        // === FINAL GOOGLE SCRAPER FALLBACK (Multi-Pattern Sync) ===
         if (commentary.filter(c => c.isPlay).length < 5) {
             try {
-                // Diversified search queries for better SERP variety
-                const searchQuads = [
-                    `${result.team_a} vs ${result.team_b} live ball by ball commentary`,
-                    `IPL ${result.team_a} vs ${result.team_b} live commentary`,
-                    `${team1.team?.abbreviation} vs ${team2.team?.abbreviation} live score google`
+                const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary ball by ball`);
+                const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}`;
+                const googleRes = await axios.get(googleUrl, { 
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, 
+                    timeout: 5000 
+                });
+                const html = googleRes.data;
+                
+                const patterns = [
+                    /(\d+\.\d+)\s*[:]\s*([\s\S]*?)<\/(?:td|div|span)>/g,
+                    /class="imso-regular-font">(\d+\.\d+)\s*:\s*([\s\S]*?)<\//g,
+                    /(\d+\.\d+)\s*(?:runs?|wicket)\s+([\s\S]*?)<\//gi
                 ];
                 
-                for (const query of searchQuads.slice(0, 1)) { // Start with most specific
-                    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&t=${Date.now()}`;
-                    const googleRes = await axios.get(googleUrl, { 
-                        headers: { 
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                            'Accept-Language': 'en-US,en;q=0.9'
-                        }, 
-                        timeout: 5000 
-                    });
-                    const html = googleRes.data;
-                    
-                    // Ultra-Aggressive pattern: look for "X.Y" followed by text until next tag or number
-                    // This captures commentary even if Google wraps it in nested spans
-                    const aggrMatches = [...html.matchAll(/(\d+\.\d+)\s*[:]\s*([\s\S]*?)(?:<\w+|$)/g)];
-                    
-                    aggrMatches.forEach(m => {
+                patterns.forEach(p => {
+                    const matches = [...html.matchAll(p)];
+                    matches.forEach(m => {
                         const overVal = m[1];
                         let rawText = m[2].replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
-                        // Ignore short or irrelevant strings (like "feedback")
-                        if (rawText && rawText.length > 10 && rawText.length < 400 && !rawText.match(/feedback|privacy|settings|terms/i)) {
+                        if (rawText && rawText.length > 10 && rawText.length < 500 && !rawText.match(/feedback|privacy|settings|terms/i)) {
                             commentary.push({
                                 over: overVal,
-                                ball: `🌐 [GOOGLE-PULSE] ${rawText}`,
+                                ball: `🌐 [GOOGLE-X] ${rawText}`,
                                 type: (rawText.toLowerCase().includes('out') || rawText.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
                                 isPlay: true
                             });
                         }
                     });
-
-                    if (commentary.filter(c => c.isPlay).length > 2) break;
-                }
+                });
             } catch (e) {
                 console.warn('[Google] Scrape fallback failed');
             }
