@@ -165,6 +165,7 @@ async function extractScoreData() {
 
     // --- Summary Player Stats ---
     const batters_summary = [];
+    const bowlers_summary = [];
     const batterRows = widget.querySelectorAll('.imspo_mh_cricket__tps.imspo_mh_cricket__right-team, .imspo_mh_cricket__tps.imspo_mh_cricket__left-team, [jsname="m6v7te"]');
     batterRows.forEach(row => {
         const spans = row.querySelectorAll('span');
@@ -178,10 +179,23 @@ async function extractScoreData() {
         }
     });
 
+    const bowlerRows = widget.querySelectorAll('.imspo_mh_cricket__tps.imspo_mh_cricket__left-team + div, [jsname="C8V0ne"]');
+    bowlerRows.forEach(row => {
+        const spans = row.querySelectorAll('span');
+        if (spans.length >= 3) {
+            bowlers_summary.push({
+                name: safeText(spans[0]),
+                overs: safeText(spans[1]),
+                runs: safeText(spans[2]),
+                wickets: safeText(spans[3])
+            });
+        }
+    });
+
     const last_balls = [];
-    widget.querySelectorAll('.imspo_mt__ball, .imspo_cmt__ball, .imspo_cmt__ov-sum-con span').forEach(ball => {
+    widget.querySelectorAll('.imspo_mt__ball, .imspo_cmt__ball, .imspo_cmt__ov-sum-con span, [jsname="fD966b"] span').forEach(ball => {
         const val = safeText(ball);
-        if (val !== 'N/A' && val.length < 5 && val !== '|') {
+        if (val !== 'N/A' && val.length < 5 && val !== '|' && val !== 'Recent balls') {
             last_balls.push({ value: val, is_wicket: val.toLowerCase().includes('w') });
         }
     });
@@ -228,6 +242,7 @@ async function extractScoreData() {
         team2_score: team2Score,
         match_status: matchStatus,
         batters_json: batters_summary,
+        bowlers_json: bowlers_summary,
         last_balls_json: last_balls,
         scorecard_json: scorecard,
         commentary_json: commentary,
