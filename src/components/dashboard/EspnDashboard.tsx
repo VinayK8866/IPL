@@ -94,7 +94,9 @@ const EspnDashboard: React.FC = () => {
                 },
                 batters: matchingScraped.batters_json || match.batters,
                 bowlers: matchingScraped.bowlers_json || match.bowlers,
-                last_balls: matchingScraped.last_balls_json || match.last_balls
+                last_balls: matchingScraped.last_balls_json || match.last_balls,
+                scorecard_json: matchingScraped.scorecard_json || match.scorecard_json,
+                commentary_json: matchingScraped.commentary_json || match.commentary_json
             };
         }
         return match;

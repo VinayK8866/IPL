@@ -25,12 +25,15 @@ import { EventAudio } from '@/components/dashboard/EventAudio';
 import { useLatencyRef } from '@/providers/LatencyProvider';
 import { AdminControls } from '@/components/dashboard/AdminControls';
 import { MatchDataProvider, useMatchData } from '@/providers/MatchDataProvider';
+import { RichScorecard } from '@/components/dashboard/RichScorecard';
+import { RichCommentary } from '@/components/dashboard/RichCommentary';
 
 export const MatchHubInner = () => {
     const { id } = useParams<{ id: string }>();
     const { score, trigger } = useMatchData();
     const { triggerExplosion, triggerShake, setAura, shakeActive, aura } = useVFX();
     const getOffset = useLatencyRef();
+    const [activeRichTab, setActiveRichTab] = React.useState<'SCORECARD' | 'COMMENTARY'>('COMMENTARY');
   
     const teamAHype = Math.round((score?.win_prob_a || 0.5) * 100);
     const teamBHype = 100 - teamAHype;
@@ -168,6 +171,31 @@ export const MatchHubInner = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                <WagonWheel matchId={id as string} />
                <PerformanceClusters matchId={id as string} />
+            </div>
+
+            {/* RICH DATA FEED */}
+            <div className="bg-[#05070A] border border-white/5 mt-4">
+                <div className="flex border-b border-white/5">
+                    <button 
+                        onClick={() => setActiveRichTab('COMMENTARY')}
+                        className={`flex-1 p-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all ${activeRichTab === 'COMMENTARY' ? 'text-[#FF3366] bg-[#FF3366]/5 border-b-2 border-[#FF3366]' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        Ball-by-Ball Feed
+                    </button>
+                    <button 
+                        onClick={() => setActiveRichTab('SCORECARD')}
+                        className={`flex-1 p-4 text-[10px] font-black uppercase tracking-[0.3em] transition-all ${activeRichTab === 'SCORECARD' ? 'text-[#7A3FE1] bg-[#7A3FE1]/5 border-b-2 border-[#7A3FE1]' : 'text-gray-500 hover:text-white'}`}
+                    >
+                        Full Scorecard
+                    </button>
+                </div>
+                <div className="p-6 max-h-[600px] overflow-y-auto no-scrollbar">
+                    {activeRichTab === 'COMMENTARY' ? (
+                        <RichCommentary commentary={score?.commentary_json || []} />
+                    ) : (
+                        <RichScorecard scorecard={score?.scorecard_json || []} />
+                    )}
+                </div>
             </div>
   
             <div className="h-40">

@@ -65,6 +65,8 @@ export interface MatchScore {
   predicted_score?: number;
 
   live_commentary?: any[];
+  scorecard_json?: any[];
+  commentary_json?: any[];
   isScraped?: boolean;
   timestamp: string;
 }

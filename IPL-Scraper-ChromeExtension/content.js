@@ -2,8 +2,9 @@
 // Injected into: https://www.google.com/search?q=ipl+live+score
 // Scrapes the live score widget and forwards data to background.js
 
-// ─── Config (mirrored for content script context) ─────────────────────────────
+// ─── Config ──────────────────────────────────────────────────────────────────
 const SCRAPE_INTERVAL_MS = 15000;
+let isScrapingDetailed = false; // Flag to prevent concurrent detail scraping
 
 // ─── Utility ──────────────────────────────────────────────────────────────────
 function log(level, ...args) {
@@ -11,121 +12,131 @@ function log(level, ...args) {
     console[level](`[IPL-CONTENT ${ts}]`, ...args);
 }
 
-/**
- * Safely extracts text content from a DOM element.
- * Returns a fallback string if element not found.
- */
 function safeText(element, fallback = "N/A") {
     return element?.textContent?.trim() || fallback;
 }
 
-/**
- * Safely extracts an attribute from a DOM element.
- */
-function safeAttr(element, attr, fallback = "N/A") {
-    return element?.getAttribute(attr)?.trim() || fallback;
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Score Extraction ─────────────────────────────────────────────────────────
+// ─── Tab Navigation ──────────────────────────────────────────────────────────
 
-/**
- * Google's cricket widget uses different class structures depending on
- * the match state. We try multiple selector strategies for resilience.
- *
- * IMPORTANT: Google changes class names frequently.
- * Update the selectors below if scraping breaks.
- *
- * Strategy:
- *   1. Try known aria-labels and roles (most stable)
- *   2. Fall back to known class name patterns
- *   3. Return null if widget not found
- */
-function extractScoreData() {
-    // ── Strategy 1: Find the main cricket widget container ──────────────────
-    const widget =
-        document.querySelector('.imso_mh__mh-ed') || // Main live card
-        document.querySelector('td.liveresults-sports-immersive__match-tile') || // Grid tiles
-        document.querySelector('.imso-mg') || // Match group
-        document.querySelector('.imspo_mt__mtc-no') || // Another match card variant
-        document.querySelector('[data-attrid="cricket_scorecard"]') ||
-        document.querySelector('[data-attrid="sports_card"]') ||
-        document.querySelector('[jsname="cricket"]') ||
-        document.querySelector('[aria-label*="cricket"]');
-
-    if (!widget) {
-        return null;
-    }
-
-    // ── Strategy 2: Extract team names ──────────────────────────────────────
-    // Prefer the containers that hold the names
-    const teamEls = widget.querySelectorAll('.imso_mh__tm-nm, .imspo_mt__tm-nm');
-    let team1Name = "N/A";
-    let team2Name = "N/A";
-
-    if (teamEls.length >= 2) {
-        // Try to get the full name from .xNfnlf, fall back to whole text
-        team1Name = safeText(teamEls[0].querySelector('.xNfnlf') || teamEls[0]);
-        team2Name = safeText(teamEls[1].querySelector('.xNfnlf') || teamEls[1]);
-    } else {
-        // Fallback to broader selectors
-        const teamNameEls = widget.querySelectorAll('.xNfnlf, [data-team]');
-        if (teamNameEls.length >= 2) {
-            team1Name = safeText(teamNameEls[0]);
-            team2Name = safeText(teamNameEls[1]);
+async function getTabButton(name) {
+    const tabs = document.querySelectorAll('li.imso-hide-overflow.tb_l.GSkImd, .GSkImd, [role="tab"]');
+    for (const tab of tabs) {
+        if (tab.textContent.toUpperCase().includes(name.toUpperCase())) {
+            return tab;
         }
     }
+    return null;
+}
 
-    // ── Strategy 3: Extract Scores ──────────────────────────────────────────
-    let team1Score = "N/A";
-    let team2Score = "N/A";
+async function switchToTab(name) {
+    const tab = await getTabButton(name);
+    if (tab) {
+        log("info", `Switching to tab: ${name}`);
+        tab.click();
+        await sleep(1500); // Wait for content to render
+        return true;
+    }
+    return false;
+}
 
-    const majorScores = widget.querySelectorAll('.imspo_mh_cricket__score-major, .imspo_mt__tt-w');
+// ─── Rich Data Extraction ─────────────────────────────────────────────────────
+
+function extractScorecard() {
+    const scorecard = [];
+    const tables = document.querySelectorAll('.liveresults-sports-immersive__lr-imso-ss-wp-tnp');
+    
+    tables.forEach((table) => {
+        const teamName = safeText(table.closest('.liveresults-sports-immersive__lr-imso-ss-wp-pni')?.querySelector('.liveresults-sports-immersive__lr-imso-ss-wp-t-nm'));
+        const batters = [];
+        const bowlers = [];
+
+        // Extract batters
+        table.querySelectorAll('tr.liveresults-sports-immersive__lr-imso-ss-wp-tnr').forEach(row => {
+            const cells = row.querySelectorAll('td, th');
+            if (cells.length >= 5) {
+                batters.push({
+                    name: safeText(cells[0]),
+                    status: safeText(cells[1]),
+                    runs: safeText(cells[2]),
+                    balls: safeText(cells[3]),
+                    fours: safeText(cells[4]),
+                    sixes: safeText(cells[5]),
+                    sr: safeText(cells[6])
+                });
+            }
+        });
+
+        scorecard.push({
+            team: teamName,
+            batters: batters
+        });
+    });
+    return scorecard;
+}
+
+function extractCommentary() {
+    const commentary = [];
+    const items = document.querySelectorAll('.imspo_cmt__cmt-mc');
+    
+    items.forEach(item => {
+        const runIndicator = item.querySelector('.imspo_cmt__cmt-po');
+        const descContainer = item.querySelector('.imspo_cmt__cmt-mc-dsc');
+        
+        if (descContainer) {
+            const fullText = descContainer.textContent.trim();
+            // Split "3.5: Text..." into over and text
+            const separatorIndex = fullText.indexOf(':');
+            const over = separatorIndex > -1 ? fullText.substring(0, separatorIndex).trim() : "N/A";
+            const text = separatorIndex > -1 ? fullText.substring(separatorIndex + 1).trim() : fullText;
+
+            commentary.push({
+                over: over,
+                run: safeText(runIndicator),
+                text: text,
+                type: runIndicator?.className.includes('bnd') ? 'boundary' : 
+                      (runIndicator?.className.includes('w') ? 'wicket' : 'normal')
+            });
+        }
+    });
+    return commentary;
+}
+
+// ─── Main Extraction Logic ────────────────────────────────────────────────────
+
+async function extractScoreData() {
+    // 1. Find main widget
+    const widget = document.querySelector('.imso_mh__mh-ed') || 
+                   document.querySelector('[data-attrid="cricket_scorecard"]') ||
+                   document.querySelector('[jsname="cricket"]');
+
+    if (!widget) return null;
+
+    // 2. Summary Data (Always available)
+    const teamEls = widget.querySelectorAll('.imso_mh__tm-nm, .imspo_mt__tm-nm');
+    let team1Name = "N/A", team2Name = "N/A";
+    if (teamEls.length >= 2) {
+        team1Name = safeText(teamEls[0].querySelector('.xNfnlf') || teamEls[0]);
+        team2Name = safeText(teamEls[1].querySelector('.xNfnlf') || teamEls[1]);
+    }
+
+    const majorScores = widget.querySelectorAll('.imspo_mh_cricket__score-major');
     const minorScores = widget.querySelectorAll('.imspo_mh_cricket__score-minor');
+    let team1Score = safeText(majorScores[0]);
+    if (minorScores[0]) team1Score += " " + safeText(minorScores[0]);
+    let team2Score = majorScores[1] ? (safeText(majorScores[1]) + (minorScores[1] ? " " + safeText(minorScores[1]) : "")) : "Yet to bat";
 
-    if (majorScores.length >= 1) {
-        team1Score = safeText(majorScores[0]);
-        if (minorScores.length >= 1) team1Score += " " + safeText(minorScores[0]);
-    }
-    
-    if (majorScores.length >= 2) {
-        team2Score = safeText(majorScores[1]);
-        if (minorScores.length >= 2) team2Score += " " + safeText(minorScores[1]);
-    } else {
-        // Look for "Yet to bat" or similar placeholders
-        const phScore = widget.querySelector('.imspo_mh_cricket__score-ph, .imspo_mt__ms-w');
-        if (phScore) team2Score = safeText(phScore);
-    }
+    const matchStatus = safeText(widget.querySelector('.imspo_mh_cricket__summary-sentence') || widget.querySelector('.imspo_mt__cmd'));
 
-    // ── Match status ────────────────────────────────────────────────────────
-    const statusEl =
-        widget.querySelector('.imspo_mh_cricket__summary-sentence') ||
-        widget.querySelector('.imspo_mt__cmd') ||
-        widget.querySelector('[class*="status"], [class*="match_status"]');
-
-    let matchStatus = safeText(statusEl);
-
-    // ── Batting team ────────────────────────────────────────────────────────
-    let battingTeam = "N/A";
-    const battingIndicator = widget.querySelector('.imspo_mh_cricket__score-major.imso-ani'); // Often animated if batting
-    
-    if (battingIndicator) {
-        // If the first score is animated, team 1 is batting
-        battingTeam = team1Name;
-    } else {
-        // Infer from score: team with runs/overs is batting
-        battingTeam = (team1Score.includes('/') || team1Score.includes('(')) ? team1Name : team2Name;
-    }
-
-    // ── Strategy 4: Detailed Player Stats (if available) ────────────────────
-    const batters = [];
-    const bowlers = [];
-    const lastBalls = [];
-
-    // Batter rows
+    // --- Legacy / Summary Fields ---
+    const batters_summary = [];
     widget.querySelectorAll('.im-batting-stats-row, [class*="batting_stats"] tr').forEach(row => {
         const cells = row.querySelectorAll('td, span');
         if (cells.length >= 3) {
-            batters.push({
+            batters_summary.push({
                 name: safeText(cells[0]),
                 runs: parseInt(safeText(cells[1])) || 0,
                 balls: parseInt(safeText(cells[2])) || 0,
@@ -134,19 +145,66 @@ function extractScoreData() {
         }
     });
 
-    // Recent balls
+    const last_balls = [];
     widget.querySelectorAll('.imspo_mt__ball, [class*="ball_circle"]').forEach(ball => {
         const val = safeText(ball);
         if (val !== 'N/A' && val.length < 5) {
-            lastBalls.push({ value: val, is_wicket: val.toLowerCase().includes('w') });
+            last_balls.push({ value: val, is_wicket: val.toLowerCase().includes('w') });
         }
     });
 
-    // ── Construct Match ID ──────────────────────────────────────────────────
+    const bowlers_summary = [];
+    widget.querySelectorAll('.imspo_mh_cricket__bowler-row, [class*="bowling_stats"] tr').forEach(row => {
+        const cells = row.querySelectorAll('td, span');
+        if (cells.length >= 3) {
+            bowlers_summary.push({
+                name: safeText(cells[0]),
+                overs: safeText(cells[1]),
+                runs: safeText(cells[2]),
+                wickets: safeText(cells[3])
+            });
+        }
+    });
+
+    // 3. Rich Data (If detailed view is open)
+    let scorecard = [];
+    let commentary = [];
+
+    // Check if we are in detailed view (tabs visible)
+    const hasTabs = document.querySelector('li.imso-hide-overflow.tb_l.GSkImd');
+    
+    if (hasTabs && !isScrapingDetailed) {
+        // Only do full rich scrape every few cycles or if data missing
+        isScrapingDetailed = true;
+        try {
+            const currentTab = document.querySelector('li.tb_st')?.textContent?.toUpperCase() || "";
+            
+            await switchToTab("SCORECARD");
+            scorecard = extractScorecard();
+            
+            await switchToTab("COMMENTARY");
+            commentary = extractCommentary();
+            
+            // Return to original tab or Summary
+            if (currentTab && !currentTab.includes("COMMENTARY")) {
+                await switchToTab(currentTab.includes("SCORECARD") ? "SCORECARD" : "SUMMARY");
+            }
+        } catch (err) {
+            log("error", "Error during detailed scrape:", err);
+        } finally {
+            isScrapingDetailed = false;
+        }
+    } else if (!hasTabs) {
+        // If not in detailed view, try to enter it
+        const detailTrigger = widget.querySelector('.imso_mh__mh-ed, [aria-label*="Match details"]');
+        if (detailTrigger) {
+            log("info", "Entering detailed view...");
+            detailTrigger.click();
+        }
+    }
+
     const today = new Date().toISOString().split("T")[0];
-    const matchId = `${team1Name}_vs_${team2Name}_${today}`
-        .replace(/\s+/g, "_")
-        .toLowerCase();
+    const matchId = `${team1Name}_vs_${team2Name}_${today}`.replace(/\s+/g, "_").toLowerCase();
 
     return {
         match_id: matchId,
@@ -155,139 +213,53 @@ function extractScoreData() {
         team1_score: team1Score,
         team2_score: team2Score,
         match_status: matchStatus,
-        batting_team: battingTeam,
-        batters_json: batters.slice(0, 2),
-        bowlers_json: bowlers.slice(0, 1),
-        last_balls_json: lastBalls.slice(-12),
+        batters_json: batters_summary,
+        bowlers_json: bowlers_summary, 
+        last_balls_json: last_balls,
+        scorecard_json: scorecard,
+        commentary_json: commentary,
         scraped_at: new Date().toISOString(),
         page_url: window.location.href,
     };
 }
 
-
-// ─── Send to Background ───────────────────────────────────────────────────────
+// ─── Communication ────────────────────────────────────────────────────────────
 
 async function sendScoreToBackground(scoreData) {
     try {
-        if (!chrome.runtime?.id) throw new Error("Extension context invalidated.");
-
-        const response = await chrome.runtime.sendMessage({
-            type: "SCORE_UPDATE",
-            payload: scoreData,
-        });
-
-        if (response?.success) {
-            log("info", "Score sent and upserted successfully:", scoreData);
-        } else {
-            log("warn", "Background reported failure:", response);
-        }
-    } catch (err) {
-        if (err.message.includes("context invalidated")) {
-            stopScript();
-        } else {
-            log("error", "Failed to send message to background:", err.message);
-        }
-    }
-}
-
-async function sendError(errorMessage) {
-    try {
         if (!chrome.runtime?.id) return;
-        await chrome.runtime.sendMessage({
-            type: "SCRAPE_ERROR",
-            error: errorMessage,
-        });
+        await chrome.runtime.sendMessage({ type: "SCORE_UPDATE", payload: scoreData });
+        log("info", "Rich score data sent successfully.");
     } catch (err) {
-        if (err.message.includes("context invalidated")) {
-            stopScript();
-        }
+        log("error", "Failed to send to background:", err.message);
     }
 }
-
-function stopScript() {
-    log("error", "Extension context invalidated. Stopping scraper. Please refresh the page.");
-    clearInterval(pollingInterval);
-    observer.disconnect();
-    clearTimeout(observerDebounceTimer);
-}
-
-// ─── Main Scrape Cycle ────────────────────────────────────────────────────────
 
 async function scrapeAndSend() {
-    log("info", "Scraping cycle started...");
-
-    const scoreData = extractScoreData();
-
-    if (!scoreData) {
-        await sendError("Widget not found or DOM not ready");
-        return;
+    if (isScrapingDetailed) return; // Busy
+    const data = await extractScoreData();
+    if (data && (data.team1_name !== "N/A" || data.team2_name !== "N/A")) {
+        await sendScoreToBackground(data);
     }
-
-    // Validate: don't send if we got all N/A (widget loaded empty)
-    const hasRealData =
-        scoreData.team1_name !== "N/A" || scoreData.team2_name !== "N/A";
-
-    if (!hasRealData) {
-        log("warn", "Extracted all N/A values — skipping send.");
-        await sendError("All values N/A — widget may be loading");
-        return;
-    }
-
-    await sendScoreToBackground(scoreData);
 }
 
-// ─── MutationObserver: React to DOM changes (widget loads async) ──────────────
-
-let observerDebounceTimer = null;
-
-const observer = new MutationObserver((mutations) => {
-    // Debounce: wait 1s after last mutation before scraping
-    const relevant = mutations.some((m) =>
-        [...m.addedNodes].some(
-            (n) => n.nodeType === 1 && (
-                n.querySelector?.('[class*="cricket"]') ||
-                n.querySelector?.('[class*="score"]') ||
-                n.querySelector?.('[class*="imso"]') ||
-                n.querySelector?.('[class*="imspo"]') ||
-                n.className?.includes?.("imso") ||
-                n.className?.includes?.("imspo") ||
-                n.textContent?.toLowerCase().includes("innings")
-            )
-        )
-    );
-
-    if (relevant) {
-        clearTimeout(observerDebounceTimer);
-        observerDebounceTimer = setTimeout(() => {
-            log("info", "MutationObserver triggered scrape.");
-            scrapeAndSend();
-        }, 1000);
-    }
-});
-
-observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-});
-
-// ─── Interval Polling: Backup to MutationObserver ────────────────────────────
-// Catches cases where the DOM is static (score updated via XHR without re-render)
+// ─── Lifecycle ───────────────────────────────────────────────────────────────
 
 const pollingInterval = setInterval(scrapeAndSend, SCRAPE_INTERVAL_MS);
 
-// ─── Cleanup on page unload ───────────────────────────────────────────────────
-window.addEventListener("beforeunload", () => {
-    observer.disconnect();
-    clearInterval(pollingInterval);
-    clearTimeout(observerDebounceTimer);
-    log("info", "Content script cleaned up.");
+const observer = new MutationObserver((mutations) => {
+    if (isScrapingDetailed) return;
+    const relevant = mutations.some(m => [...m.addedNodes].some(n => n.nodeType === 1 && n.className?.includes?.("imso")));
+    if (relevant) scrapeAndSend();
 });
 
-// ─── Initial scrape on load ───────────────────────────────────────────────────
-// Wait 3 seconds for Google's JS to render the widget
-setTimeout(() => {
-    log("info", "Initial scrape after page load delay.");
-    scrapeAndSend();
-}, 3000);
+observer.observe(document.body, { childList: true, subtree: true });
 
-log("info", "Content script initialized.");
+window.addEventListener("beforeunload", () => {
+    clearInterval(pollingInterval);
+    observer.disconnect();
+});
+
+// Initial start
+setTimeout(scrapeAndSend, 3000);
+log("info", "Rich Scraper initialized.");

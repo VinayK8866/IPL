@@ -29,6 +29,8 @@ export interface EspnMatch {
   batters?: any[];
   bowlers?: any[];
   last_balls?: any[];
+  scorecard_json?: any[];
+  commentary_json?: any[];
   isScraped?: boolean;
 }
 
@@ -49,6 +51,9 @@ const EspnMatchCard: React.FC<{ match: EspnMatch }> = ({ match }) => {
         <div className="flex justify-between items-start text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] relative z-10">
           <span className="truncate max-w-[200px] border-b border-[#7A3FE1]/30 pb-0.5">{match.series}</span>
           <span className="flex items-center gap-2 bg-[#05070A] px-2 py-0.5 skew-x-[-15deg]">
+            {(match.scorecard_json?.length || match.commentary_json?.length) ? (
+              <span className="text-[#FFD700] text-[7px] border border-[#FFD700]/30 px-1 mr-1 animate-pulse">DEEP DATA</span>
+            ) : null}
             {isLive && <div className="w-1.5 h-1.5 rounded-full bg-[#FF3366] shadow-[0_0_8px_#FF3366] animate-pulse" />}
             <span className={isLive ? 'text-[#FF3366]' : ''}>{match.status}</span>
           </span>

@@ -63,6 +63,8 @@ export function useCricketRealtime(matchId: string) {
       bowlers: matchData.bowlers || [],
       last_balls: matchData.last_balls || [],
       live_commentary: matchData.live_commentary || [],
+      scorecard_json: matchData.scorecard_json || [],
+      commentary_json: matchData.commentary_json || [],
       timestamp: matchData.timestamp || new Date().toISOString()
 
     };

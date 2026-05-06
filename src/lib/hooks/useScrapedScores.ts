@@ -12,6 +12,8 @@ export interface ScrapedScore {
   batters_json?: any[];
   bowlers_json?: any[];
   last_balls_json?: any[];
+  scorecard_json?: any[];
+  commentary_json?: any[];
   scraped_at: string;
 }
 

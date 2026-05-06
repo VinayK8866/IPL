@@ -138,6 +138,8 @@ export async function GET(
                             win_prob_a: 0.5,
                             win_prob_b: 0.5,
                             isScraped: true,
+                            scorecard_json: matchingScraped.scorecard_json || [],
+                            commentary_json: matchingScraped.commentary_json || [],
                             timestamp: matchingScraped.scraped_at
                         });
                     }
