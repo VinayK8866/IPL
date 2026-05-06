@@ -26,8 +26,8 @@ export const useScrapedScores = () => {
         .select('*');
       
       if (data) {
-        const scoresMap = data.reduce((acc, score) => {
-          acc[score.match_id] = score;
+        const scoresMap = data.reduce((acc: Record<string, ScrapedScore>, score: any) => {
+          acc[score.match_id] = score as ScrapedScore;
           return acc;
         }, {} as Record<string, ScrapedScore>);
         setScrapedScores(scoresMap);
@@ -46,7 +46,7 @@ export const useScrapedScores = () => {
           schema: 'public',
           table: 'scraped_scores',
         },
-        (payload) => {
+        (payload: any) => {
           const newScore = payload.new as ScrapedScore;
           if (newScore && newScore.match_id) {
             setScrapedScores(prev => ({
