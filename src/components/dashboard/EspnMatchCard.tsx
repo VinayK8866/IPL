@@ -26,6 +26,10 @@ export interface EspnMatch {
     isBatting?: boolean;
     logo?: string;
   };
+  batters?: any[];
+  bowlers?: any[];
+  last_balls?: any[];
+  isScraped?: boolean;
 }
 
 const EspnMatchCard: React.FC<{ match: EspnMatch }> = ({ match }) => {

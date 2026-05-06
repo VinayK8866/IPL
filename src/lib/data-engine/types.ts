@@ -65,6 +65,7 @@ export interface MatchScore {
   predicted_score?: number;
 
   live_commentary?: any[];
+  isScraped?: boolean;
   timestamp: string;
 }
 
