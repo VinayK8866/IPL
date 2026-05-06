@@ -130,7 +130,13 @@ const TeamStats = React.memo(({ score, isStreamLayout }: { score: MatchScore; is
               <Counter value={(score.score === '0/0' && score.status_text) ? 'LIVE' : (score.score || '0/0')} className={`${isStreamLayout ? 'text-7xl' : 'text-5xl'} font-black italic tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]`} />
               <div className="flex flex-col">
                 <span className={`${isStreamLayout ? 'text-xl' : 'text-sm'} font-black text-gray-400`}>({score.overs || '0.0'})</span>
+                {score.isScraped && (
+                  <span className="text-[8px] font-black text-[#7A3FE1] uppercase tracking-widest mt-1 animate-pulse">
+                    🚀 Scraper Boosted
+                  </span>
+                )}
               </div>
+
             </div>
           </div>
           <div className="flex flex-col items-end shrink-0 ml-4">

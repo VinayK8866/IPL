@@ -3,18 +3,21 @@ import EspnMatchCard, { EspnMatch } from './EspnMatchCard';
 import { Search, Monitor, Calendar, CheckSquare, ListFilter, RefreshCcw } from 'lucide-react';
 
 import { momentumSocket } from '../../lib/data-engine/socket-client';
+import { useScrapedScores, ScrapedScore } from '@/lib/hooks/useScrapedScores';
 
 const EspnDashboard: React.FC = () => {
     const [matches, setMatches] = useState<EspnMatch[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<'ALL' | 'LIVE' | 'RESULT' | 'UPCOMING'>('ALL');
+    const scrapedScores = useScrapedScores();
+
 
     const fetchMatchesFromApi = async () => {
         try {
             console.log('Fetching matches from /api/matches...');
             const response = await fetch('/api/matches');
             const data = await response.json();
-            
+
             if (data.matches) {
                 console.log(`API RECEIVED ${data.matches.length} MATCHES`);
                 // Deduplicate incoming matches by ID as an extra safety layer
@@ -63,7 +66,42 @@ const EspnDashboard: React.FC = () => {
 
 
 
-    const filteredMatches = matches.filter(m => filter === 'ALL' || m.status === filter);
+    // Merge scraped data into API matches
+    const mergedMatches = matches.map(match => {
+        // Try to find a matching scraped score by team names
+        const matchingScraped = Object.values(scrapedScores).find(s => {
+            const apiTeams = [match.teamA.name.toLowerCase(), match.teamB.name.toLowerCase()];
+            const scrapedTeams = [s.team1_name.toLowerCase(), s.team2_name.toLowerCase()];
+            return apiTeams.every(t => scrapedTeams.some(st => st.includes(t) || t.includes(st)));
+        });
+
+        if (matchingScraped) {
+            return {
+                ...match,
+                isScraped: true,
+                status: (matchingScraped.match_status.toLowerCase().includes('live') || 
+                         matchingScraped.match_status.toLowerCase().includes('innings')) ? 'LIVE' : match.status,
+                statusText: matchingScraped.match_status,
+                teamA: {
+                    ...match.teamA,
+                    score: matchingScraped.team1_score !== 'N/A' ? matchingScraped.team1_score : match.teamA.score,
+                    isBatting: matchingScraped.batting_team.toLowerCase().includes(match.teamA.name.toLowerCase())
+                },
+                teamB: {
+                    ...match.teamB,
+                    score: matchingScraped.team2_score !== 'N/A' ? matchingScraped.team2_score : match.teamB.score,
+                    isBatting: matchingScraped.batting_team.toLowerCase().includes(match.teamB.name.toLowerCase())
+                },
+                batters: matchingScraped.batters_json || match.batters,
+                bowlers: matchingScraped.bowlers_json || match.bowlers,
+                last_balls: matchingScraped.last_balls_json || match.last_balls
+            };
+        }
+        return match;
+    });
+
+    const filteredMatches = mergedMatches.filter(m => filter === 'ALL' || m.status === filter);
+
 
     // Calculate counts for each filter dynamically
     const allCount = matches.length;
@@ -101,11 +139,11 @@ const EspnDashboard: React.FC = () => {
             <div className="bg-[#0B0E14] border-b border-white/5 px-6 py-2 flex flex-wrap justify-between items-center z-40 overflow-x-auto no-scrollbar">
                 <div className="flex gap-8 whitespace-nowrap overflow-x-auto no-scrollbar">
                     <FilterButton active={filter === 'ALL'} label={`TOTAL (${matches.length})`} onClick={() => setFilter('ALL')} />
-                    <FilterButton 
-                        active={filter === 'LIVE'} 
-                        label={`LIVE (${matches.filter(m => m.status === 'LIVE').length})`} 
-                        onClick={() => setFilter('LIVE')} 
-                        icon={<div className="w-1.5 h-1.5 rounded-full bg-[#FF3366] shadow-[0_0_8px_#FF3366] animate-pulse" />} 
+                    <FilterButton
+                        active={filter === 'LIVE'}
+                        label={`LIVE (${matches.filter(m => m.status === 'LIVE').length})`}
+                        onClick={() => setFilter('LIVE')}
+                        icon={<div className="w-1.5 h-1.5 rounded-full bg-[#FF3366] shadow-[0_0_8px_#FF3366] animate-pulse" />}
                     />
                     <FilterButton active={filter === 'RESULT'} label={`FINISHED (${matches.filter(m => m.status === 'RESULT').length})`} onClick={() => setFilter('RESULT')} />
                     <FilterButton active={filter === 'UPCOMING'} label={`UPCOMING (${matches.filter(m => m.status === 'UPCOMING').length})`} onClick={() => setFilter('UPCOMING')} />
@@ -132,8 +170,8 @@ const EspnDashboard: React.FC = () => {
                             Active <span className="text-[#FF3366]">Deployments</span>
                         </h2>
                     </div>
-                    
-                    <button 
+
+                    <button
                         onClick={() => {
                             setLoading(true);
                             fetchMatchesFromApi();
@@ -186,7 +224,7 @@ const EspnDashboard: React.FC = () => {
                     </div>
                 </div>
             </footer>
-            
+
             <style jsx global>{`
                 @keyframes shimmer {
                     0% { transform: translateX(-100%); }
@@ -208,7 +246,7 @@ const EspnDashboard: React.FC = () => {
 };
 
 const FilterButton: React.FC<{ active: boolean; label: string; icon?: React.ReactNode; onClick: () => void }> = ({ active, label, icon, onClick }) => (
-    <button 
+    <button
         onClick={onClick}
         className={`flex items-center gap-3 px-1 py-4 text-[10px] font-black uppercase tracking-[0.2em] transition-all border-b-2 ${active ? 'text-[#FF3366] border-[#FF3366]' : 'text-gray-500 border-transparent hover:text-white hover:border-gray-700'}`}
     >

@@ -1,0 +1,39 @@
+{
+    "manifest_version": 3,
+    "name": "IPL Live Score Tracker",
+    "version": "1.0.0",
+    "description": "Scrapes live IPL scores from Google and sends to Supabase",
+    "permissions": [
+        "tabs",
+        "storage",
+        "alarms",
+        "scripting"
+    ],
+    "host_permissions": [
+        "https://www.google.com/*",
+        "https://www.google.co.in/*",
+        "https://*.supabase.co/*"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.google.com/search*",
+                "https://www.google.co.in/search*"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_idle",
+            "all_frames": false
+        }
+    ],
+    "icons": {
+        "16": "icons/icon16.png",
+        "48": "icons/icon48.png",
+        "128": "icons/icon128.png"
+    }
+}

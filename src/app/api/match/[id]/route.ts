@@ -103,11 +103,56 @@ export async function GET(
             }
         }
 
+        // FALLBACK: Try fetching from scraped_scores (Chrome Extension)
+        try {
+            const { data: scrapedScores } = await supabase
+                .from('scraped_scores')
+                .select('*');
+
+            if (scrapedScores && scrapedScores.length > 0) {
+                // Fuzzy match by team name
+                // Note: matchId might be something like '1510719-1426245'
+                // We'll look for a scraped score that has similar team names to what we expect 
+                // OR we can try to find the match in the 'matches' table first to get team names.
+                const { data: matchMeta } = await supabase
+                    .from('matches')
+                    .select('team_a, team_b')
+                    .eq('id', matchId)
+                    .single();
+
+                if (matchMeta) {
+                    const matchingScraped = scrapedScores.find(s => {
+                        const apiTeams = [matchMeta.team_a.toLowerCase(), matchMeta.team_b.toLowerCase()];
+                        const scrapedTeams = [s.team1_name.toLowerCase(), s.team2_name.toLowerCase()];
+                        return apiTeams.every(t => scrapedTeams.some(st => st.includes(t) || t.includes(st)));
+                    });
+
+                    if (matchingScraped) {
+                        return NextResponse.json({
+                            id: matchId,
+                            team_a: matchMeta.team_a,
+                            team_b: matchMeta.team_b,
+                            score: matchingScraped.team1_score !== 'N/A' ? matchingScraped.team1_score : (matchingScraped.team2_score !== 'N/A' ? matchingScraped.team2_score : '0/0'),
+                            overs: matchingScraped.match_status.match(/(\d+\.?\d*)\s*ov/)?.[1] || '0.0',
+                            status_text: matchingScraped.match_status,
+                            win_prob_a: 0.5,
+                            win_prob_b: 0.5,
+                            isScraped: true,
+                            timestamp: matchingScraped.scraped_at
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[API] Scraped fallback failed');
+        }
+
         return NextResponse.json({
             error: 'Match not found',
             match_id: matchId,
             debug: { seriesIdFromUrl, eventId, searchQueue }
         }, { status: 404 });
+
 
     } catch (err: any) {
         return NextResponse.json({ error: err.message }, { status: 500 });
@@ -233,29 +278,35 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
 
 
     // Fetch Summary API for Commentary, Players, and Match Notes
+    const commentary: any[] = [];
+    let summaryData: any = null;
+
     try {
         const summaryUrl = `https://site.api.espn.com/apis/site/v2/sports/cricket/${seriesId}/summary?event=${eventId}&t=${Date.now()}`;
         const summaryRes = await axios.get(summaryUrl, { headers: ESPN_HEADERS, timeout: 5000 });
-        const summaryData = summaryRes.data;
+        summaryData = summaryRes.data;
 
         // Update over_limit if available in summary
-        if (summaryData.event?.competitions?.[0]?.overLimit) {
+        if (summaryData?.event?.competitions?.[0]?.overLimit) {
             result.over_limit = summaryData.event.competitions[0].overLimit;
         }
+    } catch (err) {
+        console.warn('[API] ESPN Summary fetch failed, proceeding with fallbacks');
+    }
 
-        // === 1. LIVE COMMENTARY from notes + roster dismissals + Telemetry Synthesis ===
-        const commentary: any[] = [];
-
-        // Telemetry Synthesis (Fresh pulse for every ball)
-        const currentDetail = summaryData.header?.status?.summary || summaryText;
-        if (currentDetail && !['Live', 'Live Detail'].includes(currentDetail)) {
-             commentary.push({
-                over: result.overs,
-                ball: `⚡ ${currentDetail}`,
-                type: 'status'
-             });
-        }
-
+    // === 1. LIVE COMMENTARY SYNTHESIS ===
+    
+    // Telemetry Synthesis (Fresh pulse for every ball)
+    const currentDetail = summaryData?.header?.status?.summary || summaryText;
+    if (currentDetail && !['Live', 'Live Detail'].includes(currentDetail)) {
+            commentary.push({
+            over: result.overs,
+            ball: `⚡ ${currentDetail}`,
+            type: 'status',
+            isPlay: false
+            });
+    }
+    if (summaryData) {
         // Add a 'Telemetry Update' if the match is live — ensures feed never feels 'stale'
 
         // 1a. Match Notes (powerplays, milestones, reviews, strategic timeouts, innings breaks)
@@ -377,243 +428,210 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                 });
             }
         }
+    }
 
-        // === 1d. CRICBUZZ SCRAPER FALLBACK (Modular Overhaul v4) ===
-        if (commentary.filter(c => c.isPlay).length < 5) {
-            try {
-                const abbrev1 = team1.team?.abbreviation?.toLowerCase() || '';
-                const abbrev2 = team2.team?.abbreviation?.toLowerCase() || '';
-                const short1 = team1.team?.shortDisplayName?.toLowerCase() || '';
-                const short2 = team2.team?.shortDisplayName?.toLowerCase() || '';
-                
-                // Cricbuzz IPL 2026 matches list
-                const cbListUrl = `https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-2026/matches`;
-                const cbListRes = await axios.get(cbListUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
-                    timeout: 4000
-                });
-                const cbHtml: string = cbListRes.data;
-                
-                const matchLinkRegex = new RegExp(`/live-cricket-scores/(\\d+)/[\\w-]+`, 'g');
-                const allLinks = [...cbHtml.matchAll(matchLinkRegex)];
-                let cbMatchId = '';
-                
-                for (const link of allLinks) {
-                    const l = link[0].toLowerCase();
-                    if ((abbrev1 && l.includes(abbrev1)) || (short1 && l.includes(short1))) {
-                        if ((abbrev2 && l.includes(abbrev2)) || (short2 && l.includes(short2))) {
-                            cbMatchId = link[1];
-                            break;
-                        }
-                    }
+    // === 1d. CRICBUZZ SCRAPER FALLBACK (Independent and Resilient) ===
+    if (commentary.filter(c => c.isPlay).length < 5) {
+        try {
+            const abbrev1 = team1?.team?.abbreviation?.toLowerCase() || '';
+            const abbrev2 = team2?.team?.abbreviation?.toLowerCase() || '';
+            const short1 = team1?.team?.shortDisplayName?.toLowerCase() || '';
+            const short2 = team2?.team?.shortDisplayName?.toLowerCase() || '';
+            
+            // Cricbuzz IPL matches list - use dynamic year detection
+            const currentYear = new Date().getFullYear();
+            const cbListUrl = `https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-${currentYear}/matches`;
+            const cbListRes = await axios.get(cbListUrl, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                timeout: 4000
+            }).catch(() => axios.get(`https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-2026/matches`, { timeout: 4000 }));
+
+            const cbHtml: string = cbListRes.data;
+            const matchLinkRegex = new RegExp(`/live-cricket-scores/(\\d+)/[\\w-]+`, 'g');
+            const allLinks = [...cbHtml.matchAll(matchLinkRegex)];
+            let cbMatchId = '';
+            
+            for (const link of allLinks) {
+                const l = link[0].toLowerCase();
+                if (((abbrev1 && l.includes(abbrev1)) || (short1 && l.includes(short1))) &&
+                    ((abbrev2 && l.includes(abbrev2)) || (short2 && l.includes(short2)))) {
+                    cbMatchId = link[1];
+                    break;
                 }
-                
-                if (cbMatchId) {
-                    // Try both live and full commentary pages for maximum data coverage
-                    const pages = [`live-cricket-scores`, `live-cricket-full-commentary`];
-                    for (const pageType of pages) {
-                        const scoreUrl = `https://www.cricbuzz.com/${pageType}/${cbMatchId}`;
-                        const scoreRes = await axios.get(scoreUrl, {
-                            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-                            timeout: 5000
-                        });
-                        const html = scoreRes.data;
-                        
-                        // Pattern 1: Legacy span structure
-                        const p1 = html.matchAll(/<span class="cb-com-ovr">(\d+\.\d+)<\/span>.*?<p class="cb-com-ln">([\s\S]*?)<\/p>/g);
-                        // Pattern 2: New modular flex structure (div based)
-                        const p2 = html.matchAll(/font-bold.*?>(\d+\.\d+)<[\s\S]*?><div>([\s\S]*?)<\/div>/g);
-                        
-                        [...p1, ...p2].forEach(m => {
-                            const overVal = m[1];
-                            let text = m[2].replace(/<[^>]*>/g, '').trim();
-                            if (text.length > 5 && !text.match(/Match Progress|Innings Break|drinks/i)) {
-                                commentary.push({
-                                    over: overVal,
-                                    ball: `🏏 [CRIC-PULSE] ${text}`,
-                                    type: (text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
-                                    isPlay: true
-                                });
-                            }
-                        });
-                        if (commentary.filter(c => c.isPlay).length > 5) break; 
-                    }
-                }
-            } catch (e) {
-                console.warn('[Cricbuzz] Scrape fallback failed');
             }
-        }
-
-        // === FINAL GOOGLE SCRAPER FALLBACK (Multi-Pattern Sync) ===
-        if (commentary.filter(c => c.isPlay).length < 5) {
-            try {
-                const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary ball by ball`);
-                const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}`;
-                const googleRes = await axios.get(googleUrl, { 
-                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }, 
-                    timeout: 5000 
-                });
-                const html = googleRes.data;
-                
-                const patterns = [
-                    /(\d+\.\d+)\s*[:]\s*([\s\S]*?)<\/(?:td|div|span)>/g,
-                    /class="imso-regular-font">(\d+\.\d+)\s*:\s*([\s\S]*?)<\//g,
-                    /(\d+\.\d+)\s*(?:runs?|wicket)\s+([\s\S]*?)<\//gi
-                ];
-                
-                patterns.forEach(p => {
-                    const matches = [...html.matchAll(p)];
-                    matches.forEach(m => {
+            
+            if (cbMatchId) {
+                const pages = [`live-cricket-scores`, `live-cricket-full-commentary`];
+                for (const pageType of pages) {
+                    const scoreUrl = `https://www.cricbuzz.com/${pageType}/${cbMatchId}`;
+                    const scoreRes = await axios.get(scoreUrl, {
+                        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                        timeout: 5000
+                    });
+                    const html = scoreRes.data;
+                    const p1 = html.matchAll(/<span class="cb-com-ovr">(\d+\.\d+)<\/span>.*?<p class="cb-com-ln">([\s\S]*?)<\/p>/g);
+                    const p2 = html.matchAll(/font-bold.*?>(\d+\.\d+)<[\s\S]*?><div>([\s\S]*?)<\/div>/g);
+                    
+                    [...p1, ...p2].forEach(m => {
                         const overVal = m[1];
-                        let rawText = m[2].replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
-                        if (rawText && rawText.length > 10 && rawText.length < 500 && !rawText.match(/feedback|privacy|settings|terms/i)) {
+                        let text = m[2].replace(/<[^>]*>/g, '').trim();
+                        if (text.length > 5 && !text.match(/Match Progress|Innings Break|drinks/i)) {
                             commentary.push({
                                 over: overVal,
-                                ball: `🌐 [GOOGLE-X] ${rawText}`,
-                                type: (rawText.toLowerCase().includes('out') || rawText.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
+                                ball: `🏏 [PULSE-B] ${text}`,
+                                type: (text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
                                 isPlay: true
                             });
                         }
                     });
-                });
-            } catch (e) {
-                console.warn('[Google] Scrape fallback failed');
-            }
-        }
-
-        // === DEDUPLICATION & STABLE ID GENERATION ===
-        const seenBalls = new Set();
-        const finalCommentary: any[] = [];
-        
-        // Priority: Plays (detailed) > Roster Dismissals > Match Notes > Telemetry
-        const sortedByPriority = commentary.sort((a, b) => {
-             const priority = (item: any) => {
-                 if (item.isPlay) return 3;
-                 if (item.ball.includes('OUT!')) return 2;
-                 if (item.type === 'milestone') return 1;
-                 return 0;
-             };
-             return priority(b) - priority(a);
-        });
-
-        sortedByPriority.forEach(item => {
-            const ballKey = `${item.over}-${item.isPlay ? 'play' : 'note'}`;
-            // For plays, we only want one entry per specific ball (e.g. 15.4)
-            if (item.isPlay) {
-                if (seenBalls.has(item.over)) return;
-                seenBalls.add(item.over);
-            }
-            
-            // Generate a stable ID based on content to prevent UI flicker
-            const contentHash = Buffer.from(item.ball).toString('base64').substring(0, 8);
-            item.id = `${item.over}-${contentHash}`;
-            finalCommentary.push(item);
-        });
-
-        // Re-sort by over descending for display
-        finalCommentary.sort((a: any, b: any) => {
-            const ovA = parseFloat(a.over) || 0;
-            const ovB = parseFloat(b.over) || 0;
-            return ovB - ovA;
-        });
-
-        // === AI LIVE NARRATION with Persistent Cooldown ===
-        if (mappedStatus === 'LIVE') {
-            const lastBall = result.overs;
-            const cacheKey = result.match_id;
-            const now = Date.now();
-            
-            // 60-second cooldown per match to prevent Gemini rate-limiting and response lag
-            const lastNarrationTime = (global as any)._narrationTimestamps?.[cacheKey] || 0;
-            const hasCooldown = (now - lastNarrationTime) < 60000;
-
-            if (!narrationCache[cacheKey] || (narrationCache[cacheKey].ball !== lastBall && !hasCooldown)) {
-                try {
-                    const recentSlice = finalCommentary.slice(0, 5);
-                    const aiNarrative = await generateLiveNarration(result, recentSlice);
-                    narrationCache[cacheKey] = { text: aiNarrative, ball: lastBall };
-                    
-                    // Update global state tracking
-                    if (!(global as any)._narrationTimestamps) (global as any)._narrationTimestamps = {};
-                    (global as any)._narrationTimestamps[cacheKey] = now;
-                } catch (e) {
-                    console.warn('[AI] Narration step failed');
+                    if (commentary.filter(c => c.isPlay).length > 8) break; 
                 }
             }
+        } catch (e) {
+            console.warn('[Cricbuzz] Fallback failed');
+        }
+    }
 
-            if (narrationCache[cacheKey]) {
-                finalCommentary.unshift({
-                    id: `ai-pulse-${result.match_id}-${lastBall}`,
-                    over: narrationCache[cacheKey].ball,
-                    ball: `🤖 ${narrationCache[cacheKey].text}`,
-                    type: 'normal'
+    // === FINAL GOOGLE SCRAPER FALLBACK ===
+    if (commentary.filter(c => c.isPlay).length < 5) {
+        try {
+            const query = encodeURIComponent(`${result.team_a} vs ${result.team_b} live commentary ball by ball`);
+            const googleUrl = `https://www.google.com/search?q=${query}&t=${Date.now()}`;
+            const googleRes = await axios.get(googleUrl, { 
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }, 
+                timeout: 5000 
+            });
+            const html = googleRes.data;
+            const patterns = [
+                /(\d+\.\d+)\s*[:]\s*([\s\S]*?)<\/(?:td|div|span)>/g,
+                /class="imso-regular-font">(\d+\.\d+)\s*:\s*([\s\S]*?)<\//g,
+                /(\d+\.\d+)\s*(?:runs?|wicket)\s+([\s\S]*?)<\//gi
+            ];
+            
+            patterns.forEach(p => {
+                const matches = [...html.matchAll(p)];
+                matches.forEach(m => {
+                    const overVal = m[1];
+                    let rawText = m[2].replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim();
+                    if (rawText && rawText.length > 10 && rawText.length < 500 && !rawText.match(/feedback|privacy|settings|terms/i)) {
+                        commentary.push({
+                            over: overVal,
+                            ball: `🌐 [PULSE-G] ${rawText}`,
+                            type: (rawText.toLowerCase().includes('out') || rawText.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
+                            isPlay: true
+                        });
+                    }
                 });
-            }
+            });
+        } catch (e) {
+            console.warn('[Google] Fallback failed');
         }
+    }
 
-        result.live_commentary = finalCommentary.slice(0, 20);
-
-        // SYNC TO SUPABASE (Persistence allows dashboard and workers to share state)
-        if (supabase) {
-            try {
-                await supabase.from('matches').upsert({
-                    id: result.match_id,
-                    team_a: result.team_a,
-                    team_b: result.team_b,
-                    score: result.score,
-                    overs: result.overs,
-                    status: result.status.toLowerCase(),
-                    live_commentary: result.live_commentary,
-                    win_prob_a: result.win_prob_a,
-                    win_prob_b: result.win_prob_b,
-                    current_momentum_json: { history: [result.win_prob_a], last_ball: result.overs }
-                });
-            } catch (e) {
-                console.warn('[Supabase] Sync failed in API route');
-            }
-        }
-
-        // === 1d. POPULATE LAST BALLS TRACKER for Gladiator HUD ===
-        // STRATEGY: Only use verified ball-by-ball plays (isPlay: true). 
-        // DO NOT fallback to match notes, as they are editorial highlights (mostly wickets) 
-        // that pollute the rolling timeline with redundant 'W' icons.
-        const verifiedPlays = commentary.filter((c: any) => c.isPlay === true);
-        
-        // Final sanity check: if even verified plays is empty (rare), 
-        // only then try a very strict regex on the full commentary.
-        let finalBallSource = verifiedPlays;
-        if (finalBallSource.length === 0) {
-            finalBallSource = commentary.filter((c: any) => 
-               c.over && c.ball && /^\d+\.\d+/.test(c.over) && // Must be a specific ball number like 12.4
-               !c.ball.includes('Strategic Timeout') &&
-               !c.ball.includes('Powerplay')
-            );
-        }
-
-        result.last_balls = finalBallSource.slice(0, 12).map((c: any) => {
-            const isWicket = c.type === 'wicket' || (c.ball && c.ball.toLowerCase().includes('out!'));
-            let val = '0';
-            if (isWicket) val = 'W';
-            else if (c.type === 'four' || (c.ball && c.ball.toLowerCase().includes('four'))) val = '4';
-            else if (c.type === 'six' || (c.ball && c.ball.toLowerCase().includes('six'))) val = '6';
-            else if (c.type === 'runs' || (c.runs && c.runs > 0)) val = String(c.runs !== undefined ? c.runs : '1');
-            else if (c.type === 'dot') val = '0';
-            else val = String(c.runs !== undefined ? c.runs : '0');
-
-            return {
-                value: val,
-                is_wicket: isWicket,
-                timestamp: new Date().toISOString(),
-                over: c.over
+    // === DEDUPLICATION & STABLE ID GENERATION ===
+    const seenBalls = new Set();
+    const finalCommentary: any[] = [];
+    const sortedByPriority = commentary.sort((a, b) => {
+            const priority = (item: any) => {
+                if (item.isPlay) return 3;
+                if (item.ball.includes('OUT!')) return 2;
+                if (item.type === 'milestone') return 1;
+                return 0;
             };
-        }).reverse();
+            return priority(b) - priority(a);
+    });
 
-        // === 2. PLAYER STATS: Try situation first, fall back to rosters ===
+    sortedByPriority.forEach(item => {
+        if (item.isPlay) {
+            if (seenBalls.has(item.over)) return;
+            seenBalls.add(item.over);
+        }
+        const contentHash = Buffer.from(item.ball).toString('base64').substring(0, 8);
+        item.id = `${item.over}-${contentHash}`;
+        finalCommentary.push(item);
+    });
+
+    finalCommentary.sort((a: any, b: any) => parseFloat(b.over) - parseFloat(a.over));
+
+    // === AI LIVE NARRATION ===
+    if (mappedStatus === 'LIVE') {
+        const lastBall = result.overs;
+        const cacheKey = result.match_id;
+        const now = Date.now();
+        if (!(global as any)._narrationTimestamps) (global as any)._narrationTimestamps = {};
+        const lastTime = (global as any)._narrationTimestamps[cacheKey] || 0;
+        const inCooldown = (now - lastTime) < 60000;
+
+        if (!narrationCache[cacheKey] || (narrationCache[cacheKey].ball !== lastBall && !inCooldown)) {
+            try {
+                const recentSlice = finalCommentary.slice(0, 5);
+                const aiNarrative = await generateLiveNarration(result, recentSlice);
+                narrationCache[cacheKey] = { text: aiNarrative, ball: lastBall };
+                (global as any)._narrationTimestamps[cacheKey] = now;
+            } catch (e) {
+                console.warn('[AI] Narration failed');
+            }
+        }
+
+        if (narrationCache[cacheKey]) {
+            finalCommentary.unshift({
+                id: `ai-pulse-${result.match_id}-${lastBall}`,
+                over: narrationCache[cacheKey].ball,
+                ball: `🤖 ${narrationCache[cacheKey].text}`,
+                type: 'normal'
+            });
+        }
+    }
+
+    result.live_commentary = finalCommentary.slice(0, 20);
+
+    // SYNC TO SUPABASE
+    if (supabase) {
+        try {
+            await supabase.from('matches').upsert({
+                id: result.match_id,
+                team_a: result.team_a,
+                team_b: result.team_b,
+                score: result.score,
+                overs: result.overs,
+                status: result.status.toLowerCase(),
+                live_commentary: result.live_commentary,
+                win_prob_a: result.win_prob_a,
+                win_prob_b: result.win_prob_b,
+                current_momentum_json: { history: [result.win_prob_a], last_ball: result.overs }
+            });
+        } catch (e) {
+            console.warn('[Supabase] Sync failed');
+        }
+    }
+
+    // === POPULATE LAST BALLS ===
+    const verifiedPlays = commentary.filter((c: any) => c.isPlay === true);
+    let finalBallSource = verifiedPlays;
+    if (finalBallSource.length === 0) {
+        finalBallSource = commentary.filter((c: any) => 
+            c.over && c.ball && /^\d+\.\d+/.test(c.over) && 
+            !c.ball.includes('Strategic Timeout') &&
+            !c.ball.includes('Powerplay')
+        );
+    }
+
+    result.last_balls = finalBallSource.slice(0, 12).map((c: any) => {
+        const isWicket = c.type === 'wicket' || (c.ball && c.ball.toLowerCase().includes('out!'));
+        let val = '0';
+        if (isWicket) val = 'W';
+        else if (c.type === 'four' || (c.ball && c.ball.toLowerCase().includes('four'))) val = '4';
+        else if (c.type === 'six' || (c.ball && c.ball.toLowerCase().includes('six'))) val = '6';
+        else if (c.type === 'runs' || (c.runs && c.runs > 0)) val = String(c.runs !== undefined ? c.runs : '1');
+        else if (c.type === 'dot') val = '0';
+        else val = String(c.runs !== undefined ? c.runs : '0');
+
+        return { value: val, is_wicket: isWicket, timestamp: new Date().toISOString(), over: c.over };
+    }).reverse();
+
+    // === PLAYER STATS ===
+    if (summaryData) {
         const situ = summaryData.situation;
-        const battingTeamIdForRoster = isBattingA ? team1.team?.id : (isBattingB ? team2.team?.id : null);
-        const bowlingTeamIdForRoster = isBattingA ? team2.team?.id : (isBattingB ? team1.team?.id : null);
-
-        // Try situation data first
         if (situ?.batter1) {
             result.batters.push({
                 name: situ.batter1.athlete?.displayName || 'Batter 1',
@@ -635,27 +653,22 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             });
         }
 
-        // Fallback: Ultra-Aggressive search in ALL rosters for anyone with batted=1 and no outDetails
         if (result.batters.length === 0) {
+            const rosters = summaryData.rosters || [];
             rosters.forEach((roster: any) => {
                 (roster.roster || []).forEach((p: any) => {
                     const stats = p.linescores?.[0]?.linescores?.[0]?.statistics || p.linescores?.[0]?.statistics;
                     if (!stats || !stats.batting) return;
-                    
                     const bat = stats.batting;
                     const runs = Number(bat.runs || 0);
                     const balls = Number(bat.ballsFaced || 0);
-                    const sr = Number(bat.strikeRate || 0);
-                    
-                    // If they have batted and are not out
                     if (!bat.outDetails && (runs > 0 || balls > 0)) {
                         result.batters.push({
                             name: p.athlete?.displayName || 'Unknown',
-                            runs,
-                            balls,
+                            runs, balls,
                             fours: Number(bat.fours || 0),
                             sixes: Number(bat.sixes || 0),
-                            strikeRate: sr > 0 ? sr : (runs / Math.max(1, balls)) * 100,
+                            strikeRate: Number(bat.strikeRate || 0) || (runs / Math.max(1, balls)) * 100,
                             isBatting: result.batters.length === 0
                         });
                     }
@@ -664,32 +677,27 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
         }
         result.batters = result.batters.slice(0, 2);
 
-        // Bowler: Try situation first
         if (situ?.bowler1) {
             const overs = situ.bowler1.overs || 0;
             result.bowlers.push({
                 name: situ.bowler1.athlete?.displayName || 'Bowler',
-                overs,
-                runs: situ.bowler1.conceded || 0,
-                wickets: situ.bowler1.wickets || 0,
+                overs, runs: situ.bowler1.conceded || 0, wickets: situ.bowler1.wickets || 0,
                 economy: overs > 0 ? parseFloat(((situ.bowler1.conceded || 0) / overs).toFixed(2)) : 0
             });
         }
 
-        // Fallback: Extract bowlers from bowling team roster
         if (result.bowlers.length === 0) {
+            const rosters = summaryData.rosters || [];
             rosters.forEach((roster: any) => {
                 (roster.roster || []).forEach((player: any) => {
                     const innerLs = player.linescores?.[0]?.linescores?.[0] || player.linescores?.[0];
                     if (!innerLs) return;
-                    const stats = innerLs.statistics?.categories?.[0]?.stats || innerLs.statistics?.bowling?.stats;
+                    const stats = innerLs.statistics?.[0]?.stats || innerLs.statistics?.bowling?.stats;
                     if (!stats) return;
-                    
                     const getStatVal = (name: string) => {
-                        const s = stats.find ? stats.find((st: any) => st.name === name) : null;
+                        const s = Array.isArray(stats) ? stats.find((st: any) => st.name === name) : null;
                         return s ? Number(s.value) : 0;
                     };
-                    
                     const overs = getStatVal('overs') || Number(innerLs.statistics?.bowling?.overs || 0);
                     if (overs > 0) {
                         result.bowlers.push({
@@ -702,17 +710,12 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
                     }
                 });
             });
-            // Keep most active bowler (highest overs)
             result.bowlers.sort((a: any, b: any) => (parseFloat(b.overs) || 0) - (parseFloat(a.overs) || 0));
-            if (result.bowlers.length > 1) {
-                result.bowlers = [result.bowlers[0]];
-            }
+            if (result.bowlers.length > 1) result.bowlers = [result.bowlers[0]];
         }
 
-        // === 3. Win Probability from Odds ===
         const odds = summaryData.odds?.[0];
         if (odds?.homeTeamOdds && odds?.awayTeamOdds) {
-            // Parse fractional odds to implied probability
             const parseOdds = (summary: string) => {
                 const parts = summary.split('/');
                 if (parts.length === 2) {
@@ -725,14 +728,90 @@ async function buildEnrichedMatchScore(event: any, seriesId: string, eventId: st
             result.win_prob_a = parseOdds(odds.homeTeamOdds.odds?.summary || '1/1');
             result.win_prob_b = parseOdds(odds.awayTeamOdds.odds?.summary || '1/1');
         }
-
         if (summaryData.predictor?.homeTeam) {
             result.win_prob_a = (summaryData.predictor.homeTeam.gameProjection || 50) / 100;
             result.win_prob_b = 1 - result.win_prob_a;
         }
-    } catch {
-        // Summary fetch failure is non-fatal — scoreboard data still drives the score
     }
 
     return result;
+}
+
+/**
+ * UTILITY: Finds Cricbuzz Match ID based on team names
+ */
+async function findCricbuzzMatchId(team1: any, team2: any) {
+    try {
+        const t1 = team1.team?.shortDisplayName?.toLowerCase() || '';
+        const t2 = team2.team?.shortDisplayName?.toLowerCase() || '';
+        const currentYear = new Date().getFullYear();
+        const url = `https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-${currentYear}/matches`;
+        
+        const res = await axios.get(url, { 
+            headers: { 'User-Agent': 'Mozilla/5.0' }, 
+            timeout: 4000 
+        }).catch(() => axios.get(`https://www.cricbuzz.com/cricket-series/9241/indian-premier-league-2026/matches`, { timeout: 4000 }));
+
+        const html = res.data;
+        // Search for a link that contains both team names
+        const match = html.match(new RegExp(`/live-cricket-scores/(\\d+)/[\\w-]*${t1}[\\w-]*${t2}`, 'i')) || 
+                      html.match(new RegExp(`/live-cricket-scores/(\\d+)/[\\w-]*${t2}[\\w-]*${t1}`, 'i'));
+                      
+        return match ? match[1] : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * UTILITY: Fetches commentary from Cricbuzz
+ */
+async function fetchCricbuzzCommentary(cbId: string) {
+    const comms: any[] = [];
+    try {
+        const res = await axios.get(`https://www.cricbuzz.com/live-cricket-scores/${cbId}`, { 
+            headers: { 'User-Agent': 'Mozilla/5.0' }, 
+            timeout: 5000 
+        });
+        const matches = res.data.matchAll(/cb-com-ovr">(\d+\.\d+)<\/span>.*?cb-com-ln">([\s\S]*?)<\/p>/g);
+        for (const m of matches) {
+            const text = m[2].replace(/<[^>]*>/g, '').trim();
+            comms.push({
+                over: m[1],
+                ball: `🏏 [PULSE-B] ${text}`,
+                type: (text.toLowerCase().includes('out') || text.toLowerCase().includes('wicket')) ? 'wicket' : 'normal',
+                isPlay: true
+            });
+        }
+    } catch {}
+    return comms;
+}
+
+/**
+ * UTILITY: Fetches commentary from Google Search results
+ */
+async function fetchGoogleCommentary(t1: string, t2: string) {
+    const comms: any[] = [];
+    try {
+        const q = encodeURIComponent(`${t1} vs ${t2} live commentary ball by ball`);
+        const res = await axios.get(`https://www.google.com/search?q=${q}`, { 
+            headers: { 'User-Agent': 'Mozilla/5.0' }, 
+            timeout: 5000 
+        });
+        const html = res.data;
+        // Look for "15.4: Text description" pattern
+        const matches = html.matchAll(/(\d+\.\d+)\s*:\s*([\s\S]*?)<\//g);
+        for (const m of matches) {
+            const text = m[2].replace(/<[^>]*>/g, ' ').trim();
+            if (text.length > 20 && text.length < 500) {
+                comms.push({
+                    over: m[1],
+                    ball: `🌐 [PULSE-G] ${text}`,
+                    type: (text.toLowerCase().includes('wicket') || text.toLowerCase().includes('out')) ? 'wicket' : 'normal',
+                    isPlay: true
+                });
+            }
+        }
+    } catch {}
+    return comms;
 }
