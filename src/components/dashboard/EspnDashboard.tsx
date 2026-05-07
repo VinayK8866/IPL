@@ -70,27 +70,27 @@ const EspnDashboard: React.FC = () => {
     const mergedMatches = matches.map(match => {
         // Try to find a matching scraped score by team names
         const matchingScraped = Object.values(scrapedScores).find(s => {
-            const apiTeams = [match.teamA.name.toLowerCase(), match.teamB.name.toLowerCase()];
-            const scrapedTeams = [s.team1_name.toLowerCase(), s.team2_name.toLowerCase()];
-            return apiTeams.every(t => scrapedTeams.some(st => st.includes(t) || t.includes(st)));
+            const apiTeams = [(match.teamA?.name || '').toLowerCase(), (match.teamB?.name || '').toLowerCase()];
+            const scrapedTeams = [(s.team1_name || '').toLowerCase(), (s.team2_name || '').toLowerCase()];
+            return apiTeams.every(t => t && scrapedTeams.some(st => st.includes(t) || t.includes(st)));
         });
 
         if (matchingScraped) {
             return {
                 ...match,
                 isScraped: true,
-                status: (matchingScraped.match_status.toLowerCase().includes('live') || 
-                         matchingScraped.match_status.toLowerCase().includes('innings')) ? 'LIVE' : match.status,
+                status: ((matchingScraped.match_status || '').toLowerCase().includes('live') || 
+                         (matchingScraped.match_status || '').toLowerCase().includes('innings')) ? 'LIVE' : match.status,
                 statusText: matchingScraped.match_status,
                 teamA: {
                     ...match.teamA,
                     score: matchingScraped.team1_score !== 'N/A' ? matchingScraped.team1_score : match.teamA.score,
-                    isBatting: matchingScraped.batting_team.toLowerCase().includes(match.teamA.name.toLowerCase())
+                    isBatting: (matchingScraped.batting_team || '').toLowerCase().includes((match.teamA?.name || '').toLowerCase())
                 },
                 teamB: {
                     ...match.teamB,
                     score: matchingScraped.team2_score !== 'N/A' ? matchingScraped.team2_score : match.teamB.score,
-                    isBatting: matchingScraped.batting_team.toLowerCase().includes(match.teamB.name.toLowerCase())
+                    isBatting: (matchingScraped.batting_team || '').toLowerCase().includes((match.teamB?.name || '').toLowerCase())
                 },
                 batters: matchingScraped.batters_json || match.batters,
                 bowlers: matchingScraped.bowlers_json || match.bowlers,
